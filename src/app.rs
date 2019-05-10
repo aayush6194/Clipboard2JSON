@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ffi::CString;
 use x11::xlib::*;
 
@@ -31,7 +32,8 @@ impl App {
         Ok(App { display, window })
     }
 
-    pub fn get_targets(&self) {
+    pub fn get_targets(&self) -> HashSet<String> {
+        let mut targets = HashSet::default();
         let mut event: XEvent = unsafe { std::mem::uninitialized() };
         let targets_id = unsafe {
             XInternAtom(
@@ -113,17 +115,19 @@ impl App {
                     &mut result,
                 );
 
-                let targets = std::mem::transmute::<_, *mut u64>(result);
+                let result = std::mem::transmute::<_, *mut u64>(result);
 
                 for i in 0..returned_items {
-                    let atom: Atom = *targets.offset(i as isize) as Atom;
+                    let atom: Atom = *result.offset(i as isize) as Atom;
                     let atom_name = XGetAtomName(self.display, atom);
                     let name = CString::from_raw(atom_name);
-                    println!("{}", name.to_str().unwrap());
+                    targets.insert(name.into_string().unwrap());
                 }
             }
 
             XDeleteProperty(self.display, self.window, prop_id);
+
+            targets
         }
     }
 }
