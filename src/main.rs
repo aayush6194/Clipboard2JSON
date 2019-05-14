@@ -1,6 +1,3 @@
-use std::ffi::CString;
-use x11::xlib;
-
 mod app;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
