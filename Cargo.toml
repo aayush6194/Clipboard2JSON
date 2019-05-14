@@ -8,4 +8,4 @@ edition = "2018"
 x11 = { version = "^2.18", features = ["xlib"] }
 
 [target.'cfg(windows)'.dependencies]
-winapi = "0.3.7"
+winapi = { version = "0.3.7", features = ["winuser", "libloaderapi"] }
