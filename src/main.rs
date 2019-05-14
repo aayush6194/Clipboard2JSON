@@ -10,6 +10,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[cfg(target_os = "windows")]
+mod winapi;
+
 fn main() {
-    println!("WIP for windows");
+    winapi::monitor_clipboard();
 }
