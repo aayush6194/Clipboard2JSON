@@ -1,10 +1,10 @@
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr::null_mut;
-use url::Url;
 use winapi::ctypes::wchar_t;
 use winapi::shared::minwindef::{LPARAM, LRESULT, WPARAM};
 use winapi::shared::windef::{HWND, POINT};
@@ -18,9 +18,12 @@ use winapi::um::winuser::{
     WM_CLIPBOARDUPDATE, WM_DESTROY, WNDCLASSW, WS_MINIMIZE,
 };
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type", content = "data")]
 enum ClipboardData {
-    Html(Url, String),
-    Text(String),
+    Html(String, String),
+    #[serde(rename = "text")]
+    UnicodeText(String),
 }
 
 struct Clipboard {
@@ -85,15 +88,18 @@ impl Clipboard {
                     let fragment = data_str
                         .get(c[4].parse::<usize>().unwrap()..c[5].parse::<usize>().unwrap())
                         .unwrap();
-                    let source_url = Url::parse(&c[6]).unwrap();
-                    self.data = Some(ClipboardData::Html(source_url, fragment.to_string()));
+                    let source_url = &c[6];
+                    self.data = Some(ClipboardData::Html(
+                        source_url.to_string(),
+                        fragment.to_string(),
+                    ));
                     GlobalUnlock(data);
                 } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
                     let data = GetClipboardData(CF_UNICODETEXT);
                     let data = GlobalLock(data);
                     let len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
                     let v = Vec::from_raw_parts(data as *mut u16, len, len);
-                    let data_str = ClipboardData::Text(String::from_utf16(&v).unwrap());
+                    let data_str = ClipboardData::UnicodeText(String::from_utf16(&v).unwrap());
                     self.data = Some(data_str);
                     GlobalUnlock(data);
                 }
