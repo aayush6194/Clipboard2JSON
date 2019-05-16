@@ -45,7 +45,11 @@ pub fn get_clipboard() {
             let cf_html = RegisterClipboardFormatW(html_wide.as_ptr());
 
             if formats.contains(&cf_html) {
-
+                let data = GetClipboardData(cf_html);
+                let data = GlobalLock(data);
+                let str = std::ffi::CString::from_raw(data as *mut i8);
+                println!("{:?}", str);
+                GlobalUnlock(data);
             } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
                 let data = GetClipboardData(CF_UNICODETEXT);
                 let data = GlobalLock(data);
