@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 regex = "1"
+url = "^1.7"
 
 [target.'cfg(linux)'.dependencies]
 x11 = { version = "^2.18", features = ["xlib"] }
