@@ -4,6 +4,7 @@ use std::ffi::OsStr;
 use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr::null_mut;
+use url::Url;
 use winapi::ctypes::wchar_t;
 use winapi::shared::minwindef::{LPARAM, LRESULT, WPARAM};
 use winapi::shared::windef::{HWND, POINT};
@@ -17,35 +18,20 @@ use winapi::um::winuser::{
     WM_CLIPBOARDUPDATE, WM_DESTROY, WNDCLASSW, WS_MINIMIZE,
 };
 
-fn get_formats() -> HashSet<u32> {
-    let mut v = HashSet::new();
-    unsafe {
-        if OpenClipboard(null_mut()) != 0 {
-            let mut format = EnumClipboardFormats(0);
-            loop {
-                if format == 0 {
-                    break;
-                }
-                v.insert(format);
-                format = EnumClipboardFormats(format);
-            }
-        }
-    }
-    v
+enum ClipboardData {
+    Html(Url, String),
+    Text(String),
 }
 
-pub fn get_clipboard() {
-    let formats = get_formats();
-    unsafe {
-        if OpenClipboard(null_mut()) != 0 {
-            // check for CF_CLIPBOARD
-            let html_wide: Vec<u16> = OsStr::new("HTML Format")
-                .encode_wide()
-                .chain(once(0))
-                .collect();
-            let cf_html = RegisterClipboardFormatW(html_wide.as_ptr());
-            let re = Regex::new(
-                r#"(?x)
+struct Clipboard {
+    html_regex: Regex,
+    data: Option<ClipboardData>,
+}
+
+impl Clipboard {
+    pub fn new() -> Self {
+        let html_regex = Regex::new(
+            r#"(?x)
                 Version:(\d+.\d+)\r\n
                 StartHTML:(\d+)\r\n
                 EndHTML:(\d+)\r\n
@@ -53,30 +39,66 @@ pub fn get_clipboard() {
                 EndFragment:(\d+)\r\n
                 SourceURL:(\S+)\r\n
             "#,
-            )
-            .unwrap();
-            if formats.contains(&cf_html) {
-                let data = GetClipboardData(cf_html);
-                let data = GlobalLock(data);
-                let str = std::ffi::CString::from_raw(data as *mut i8)
-                    .into_string()
-                    .unwrap();
-                let c = re.captures(&str).unwrap();
-                let html_content = str
-                    .get(c[4].parse::<usize>().unwrap()..c[5].parse::<usize>().unwrap())
-                    .unwrap();
-                let source = &c[6];
-                GlobalUnlock(data);
-            } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
-                let data = GetClipboardData(CF_UNICODETEXT);
-                let data = GlobalLock(data);
-                let len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
-                let v = Vec::from_raw_parts(data as *mut u16, len, len);
-                let str = String::from_utf16(&v);
-                println!("{:?}", str);
-                GlobalUnlock(data);
+        )
+        .unwrap();
+
+        Clipboard {
+            html_regex,
+            data: None,
+        }
+    }
+
+    pub fn get_formats() -> HashSet<u32> {
+        let mut formats = HashSet::new();
+        unsafe {
+            if OpenClipboard(null_mut()) != 0 {
+                let mut format = EnumClipboardFormats(0);
+                loop {
+                    if format == 0 {
+                        break;
+                    }
+                    formats.insert(format);
+                    format = EnumClipboardFormats(format);
+                }
             }
-            CloseClipboard();
+        }
+        formats
+    }
+
+    pub fn get_clipboard(&mut self) {
+        let formats = Clipboard::get_formats();
+        unsafe {
+            if OpenClipboard(null_mut()) != 0 {
+                // check for CF_CLIPBOARD
+                let html_wide: Vec<u16> = OsStr::new("HTML Format")
+                    .encode_wide()
+                    .chain(once(0))
+                    .collect();
+                let cf_html = RegisterClipboardFormatW(html_wide.as_ptr());
+                if formats.contains(&cf_html) {
+                    let data = GetClipboardData(cf_html);
+                    let data = GlobalLock(data);
+                    let data_str = std::ffi::CString::from_raw(data as *mut i8)
+                        .into_string()
+                        .unwrap();
+                    let c = self.html_regex.captures(&data_str).unwrap();
+                    let fragment = data_str
+                        .get(c[4].parse::<usize>().unwrap()..c[5].parse::<usize>().unwrap())
+                        .unwrap();
+                    let source_url = Url::parse(&c[6]).unwrap();
+                    self.data = Some(ClipboardData::Html(source_url, fragment.to_string()));
+                    GlobalUnlock(data);
+                } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
+                    let data = GetClipboardData(CF_UNICODETEXT);
+                    let data = GlobalLock(data);
+                    let len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
+                    let v = Vec::from_raw_parts(data as *mut u16, len, len);
+                    let data_str = ClipboardData::Text(String::from_utf16(&v).unwrap());
+                    self.data = Some(data_str);
+                    GlobalUnlock(data);
+                }
+                CloseClipboard();
+            }
         }
     }
 }
@@ -137,7 +159,8 @@ unsafe extern "system" fn wnd_proc(
 ) -> LRESULT {
     match msg {
         WM_CLIPBOARDUPDATE => {
-            get_clipboard();
+            let mut clipboard = Clipboard::new();
+            clipboard.get_clipboard();
             1
         }
         WM_DESTROY => {
