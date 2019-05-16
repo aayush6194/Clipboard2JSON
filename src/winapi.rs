@@ -1,3 +1,4 @@
+use regex::Regex;
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::iter::once;
@@ -43,12 +44,28 @@ pub fn get_clipboard() {
                 .chain(once(0))
                 .collect();
             let cf_html = RegisterClipboardFormatW(html_wide.as_ptr());
-
+            let re = Regex::new(
+                r#"(?x)
+                Version:(\d+.\d+)\r\n
+                StartHTML:(\d+)\r\n
+                EndHTML:(\d+)\r\n
+                StartFragment:(\d+)\r\n
+                EndFragment:(\d+)\r\n
+                SourceURL:(\S+)\r\n
+            "#,
+            )
+            .unwrap();
             if formats.contains(&cf_html) {
                 let data = GetClipboardData(cf_html);
                 let data = GlobalLock(data);
-                let str = std::ffi::CString::from_raw(data as *mut i8);
-                println!("{:?}", str);
+                let str = std::ffi::CString::from_raw(data as *mut i8)
+                    .into_string()
+                    .unwrap();
+                let c = re.captures(&str).unwrap();
+                let html_content = str
+                    .get(c[4].parse::<usize>().unwrap()..c[5].parse::<usize>().unwrap())
+                    .unwrap();
+                let source = &c[6];
                 GlobalUnlock(data);
             } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
                 let data = GetClipboardData(CF_UNICODETEXT);
