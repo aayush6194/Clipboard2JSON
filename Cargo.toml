@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["lawrencek0 <l.khadka@outlook.com>"]
 edition = "2018"
 
+[dependencies]
+regex = "1"
+
 [target.'cfg(linux)'.dependencies]
 x11 = { version = "^2.18", features = ["xlib"] }
 
