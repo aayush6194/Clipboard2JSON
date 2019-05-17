@@ -10,7 +10,7 @@ url = "^1.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-[target.'cfg(linux)'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 x11 = { version = "^2.18", features = ["xlib"] }
 
 [target.'cfg(windows)'.dependencies]
