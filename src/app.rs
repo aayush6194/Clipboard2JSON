@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::ffi::CString;
 use x11::xlib::*;
 
@@ -32,8 +32,8 @@ impl App {
         Ok(App { display, window })
     }
 
-    pub fn get_targets(&self) -> HashSet<String> {
-        let mut targets = HashSet::default();
+    pub fn get_targets(&self) -> HashMap<String, Atom> {
+        let mut targets = HashMap::default();
         let mut event: XEvent = unsafe { std::mem::uninitialized() };
         let targets_id = unsafe {
             XInternAtom(
@@ -121,7 +121,7 @@ impl App {
                     let atom: Atom = *result.offset(i as isize) as Atom;
                     let atom_name = XGetAtomName(self.display, atom);
                     let name = CString::from_raw(atom_name);
-                    targets.insert(name.into_string().unwrap());
+                    targets.insert(name.into_string().unwrap(), atom);
                 }
             }
 
