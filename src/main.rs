@@ -12,6 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(target_os = "windows")]
 mod winapi;
 
+#[cfg(target_os = "windows")]
 fn main() {
     winapi::monitor_clipboard();
 }
