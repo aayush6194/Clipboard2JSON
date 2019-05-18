@@ -253,7 +253,8 @@ impl Clipboard {
                     let targets = self.get_targets();
                     let target_id = targets
                         .get("text/html")
-                        .or_else(|| targets.get("UTF8_STRING"));
+                        .or_else(|| targets.get("UTF8_STRING"))
+                        .or_else(|| targets.get("TEXT"));
                     if target_id.is_some() {
                         let clipboard_data =
                             self.get_clipboard(clipboard_id, *target_id.unwrap(), &mut event);
