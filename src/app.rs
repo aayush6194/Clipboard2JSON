@@ -1,11 +1,17 @@
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::os::raw::{c_int, c_long, c_ulong};
 use x11::xlib::*;
 
 pub struct App {
     display: *mut Display,
     window: Window,
     prop_id: Atom,
+}
+
+extern "C" {
+    fn XFixesSelectSelectionInput(_4: *mut Display, _3: Window, _2: Atom, _1: c_ulong);
+    fn XFixesQueryExtension(_3: *mut Display, _2: *mut c_int, _1: *mut c_int) -> c_int;
 }
 
 impl App {
@@ -132,74 +138,94 @@ impl App {
 
     pub fn watch_clipboard(&self) {
         unsafe {
-            let targets = self.get_targets();
-            let target_id = targets
-                .get("text/html")
-                .or_else(|| targets.get("UTF8_STRING"));
+            let clipboard_id =
+                XInternAtom(self.display, CString::new("CLIPBOARD").unwrap().as_ptr(), 0);
+            let mut event_base = std::mem::uninitialized();
+            let mut error_base = std::mem::uninitialized();
+            let mut event: XEvent = std::mem::uninitialized();
 
-            if target_id.is_some() {
-                let clipboard_id =
-                    XInternAtom(self.display, CString::new("CLIPBOARD").unwrap().as_ptr(), 0);
-                let incr_id = XInternAtom(self.display, CString::new("INCR").unwrap().as_ptr(), 0);
-                let owner = XGetSelectionOwner(self.display, clipboard_id);
-                XConvertSelection(
-                    self.display,
-                    clipboard_id,
-                    *target_id.unwrap(),
-                    self.prop_id,
-                    self.window,
-                    CurrentTime,
-                );
-                let mut event: XEvent = std::mem::uninitialized();
+            let XFixesSetSelectionOwnerNotifyMask = (1 as c_long) << 0;
+            let XFixesSelectionNotify = 0;
 
-                loop {
-                    XNextEvent(self.display, &mut event);
+            assert!(XFixesQueryExtension(self.display, &mut event_base, &mut error_base) != 0);
+            XFixesSelectSelectionInput(
+                self.display,
+                self.window,
+                clipboard_id,
+                XFixesSetSelectionOwnerNotifyMask as u64,
+            );
 
-                    if event.type_ == SelectionNotify || event.selection.selection != clipboard_id {
-                        break;
-                    }
-                }
+            loop {
+                XNextEvent(self.display, &mut event);
 
-                if event.selection.property != 0 {
-                    use std::os::raw::*;
+                if event.type_ == event_base + XFixesSelectionNotify {
+                    let targets = self.get_targets();
+                    let target_id = targets
+                        .get("text/html")
+                        .or_else(|| targets.get("UTF8_STRING"));
+                    if target_id.is_some() {
+                        let incr_id =
+                            XInternAtom(self.display, CString::new("INCR").unwrap().as_ptr(), 0);
 
-                    let mut return_type_id: Atom = std::mem::uninitialized();
-                    let mut return_format: c_int = 0;
-                    let mut returned_items: c_ulong = 0;
-                    let mut bytes_left: c_ulong = 0;
-                    let mut result: *mut c_uchar = std::mem::uninitialized();
-
-                    XGetWindowProperty(
-                        self.display,
-                        self.window,
-                        self.prop_id,
-                        0,
-                        0,
-                        False,
-                        AnyPropertyType as u64,
-                        &mut return_type_id,
-                        &mut return_format,
-                        &mut returned_items,
-                        &mut bytes_left,
-                        &mut result,
-                    );
-
-                    if return_type_id != incr_id {
-                        XGetWindowProperty(
+                        XConvertSelection(
                             self.display,
-                            self.window,
+                            clipboard_id,
+                            *target_id.unwrap(),
                             self.prop_id,
-                            0,
-                            bytes_left as i64 * std::mem::size_of::<c_char>() as i64,
-                            False,
-                            AnyPropertyType as u64,
-                            &mut return_type_id,
-                            &mut return_format,
-                            &mut returned_items,
-                            &mut bytes_left,
-                            &mut result,
+                            self.window,
+                            CurrentTime,
                         );
-                        println!("{:?}", CString::from_raw(result as *mut c_char));
+
+                        loop {
+                            XNextEvent(self.display, &mut event);
+
+                            if event.type_ == SelectionNotify {
+                                break;
+                            }
+                        }
+
+                        if event.selection.property != 0 {
+                            use std::os::raw::*;
+
+                            let mut return_type_id: Atom = std::mem::uninitialized();
+                            let mut return_format: c_int = 0;
+                            let mut returned_items: c_ulong = 0;
+                            let mut bytes_left: c_ulong = 0;
+                            let mut result: *mut c_uchar = std::mem::uninitialized();
+
+                            XGetWindowProperty(
+                                self.display,
+                                self.window,
+                                self.prop_id,
+                                0,
+                                0,
+                                False,
+                                AnyPropertyType as u64,
+                                &mut return_type_id,
+                                &mut return_format,
+                                &mut returned_items,
+                                &mut bytes_left,
+                                &mut result,
+                            );
+
+                            if return_type_id != incr_id {
+                                XGetWindowProperty(
+                                    self.display,
+                                    self.window,
+                                    self.prop_id,
+                                    0,
+                                    bytes_left as i64 * std::mem::size_of::<c_char>() as i64,
+                                    False,
+                                    AnyPropertyType as u64,
+                                    &mut return_type_id,
+                                    &mut return_format,
+                                    &mut returned_items,
+                                    &mut bytes_left,
+                                    &mut result,
+                                );
+                                println!("{:?}", CString::from_raw(result as *mut c_char));
+                            }
+                        }
                     }
                 }
             }
