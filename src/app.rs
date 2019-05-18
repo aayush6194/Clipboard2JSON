@@ -1,3 +1,4 @@
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -278,14 +279,17 @@ impl Clipboard {
     }
 }
 
-fn save_clipboard_to_file(data: ClipboardData) -> Result<(), io::Error> {
+fn save_clipboard_to_file<T>(data: T) -> Result<(), io::Error>
+where
+    T: DeserializeOwned + Serialize
+{
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .open("clipboard.json")?;
     let reader = BufReader::new(&mut file);
-    let mut stored_data: Vec<ClipboardData> = serde_json::from_reader(reader).unwrap_or_default();
+    let mut stored_data: Vec<T> = serde_json::from_reader(reader).unwrap_or_default();
     stored_data.push(data);
     drop(file);
     let file = std::fs::File::create("clipboard.json")?;
