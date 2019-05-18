@@ -3,6 +3,7 @@ name = "clipboard-rs"
 version = "0.1.0"
 authors = ["lawrencek0 <l.khadka@outlook.com>"]
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 regex = "1"
@@ -15,3 +16,6 @@ x11 = { version = "^2.18", features = ["xlib"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.7", features = ["winuser", "winbase", "libloaderapi"] }
+
+[build-dependencies]
+pkg-config = "^0.3"
