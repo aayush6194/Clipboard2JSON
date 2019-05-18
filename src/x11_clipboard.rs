@@ -63,8 +63,7 @@ impl Clipboard {
         })
     }
 
-    pub fn get_targets(&self) -> HashMap<String, Atom> {
-        let mut targets = HashMap::default();
+    pub fn get_targets(&self) -> Option<HashMap<String, Atom>> {
         let mut event: XEvent = unsafe { mem::uninitialized() };
         let targets_id = unsafe {
             XInternAtom(
@@ -139,15 +138,19 @@ impl Clipboard {
 
                 let result = mem::transmute::<_, *mut u64>(result);
 
-                for i in 0..returned_items {
-                    let atom: Atom = *result.offset(i as isize) as Atom;
-                    let atom_name = XGetAtomName(self.display, atom);
-                    let name = CString::from_raw(atom_name);
-                    targets.insert(name.into_string().unwrap(), atom);
-                }
+                let targets = (0..returned_items)
+                    .map(|i| {
+                        let atom: Atom = *result.offset(i as isize) as Atom;
+                        let atom_name = XGetAtomName(self.display, atom);
+                        let name = CString::from_raw(atom_name);
+                        return (name.into_string().unwrap(), atom);
+                    })
+                    .collect::<HashMap<String, Atom>>();
+
+                return Some(targets);
             }
 
-            targets
+            None
         }
     }
 
@@ -250,25 +253,29 @@ impl Clipboard {
 
                 if event.type_ == event_base + XFixesSelectionNotify {
                     let targets = self.get_targets();
-                    let target_id = targets
-                        .get("text/html")
-                        .or_else(|| targets.get("UTF8_STRING"))
-                        .or_else(|| targets.get("TEXT"));
-                    if target_id.is_some() {
-                        let clipboard_data =
-                            self.get_clipboard(clipboard_id, *target_id.unwrap(), &mut event);
 
-                        if clipboard_data.is_some() {
-                            let clipboard_data = if targets.get("text/html").is_some() {
-                                ClipboardData::Html(clipboard_data.unwrap())
-                            } else {
-                                ClipboardData::UnicodeText(clipboard_data.unwrap())
-                            };
-                            thread::spawn(move || {
-                                if let Err(e) = save_clipboard_to_file(clipboard_data) {
-                                    eprintln!("Error while trying to save the file {}", e);
-                                }
-                            });
+                    if targets.is_some() {
+                        let targets = targets.unwrap();
+                        let target_id = targets
+                            .get("text/html")
+                            .or_else(|| targets.get("UTF8_STRING"))
+                            .or_else(|| targets.get("TEXT"));
+                        if target_id.is_some() {
+                            let clipboard_data =
+                                self.get_clipboard(clipboard_id, *target_id.unwrap(), &mut event);
+
+                            if clipboard_data.is_some() {
+                                let clipboard_data = if targets.get("text/html").is_some() {
+                                    ClipboardData::Html(clipboard_data.unwrap())
+                                } else {
+                                    ClipboardData::UnicodeText(clipboard_data.unwrap())
+                                };
+                                thread::spawn(move || {
+                                    if let Err(e) = save_clipboard_to_file(clipboard_data) {
+                                        eprintln!("Error while trying to save the file {}", e);
+                                    }
+                                });
+                            }
                         }
                     }
                 }
