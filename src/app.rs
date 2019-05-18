@@ -148,7 +148,9 @@ impl App {
             let mut error_base = mem::uninitialized();
             let mut event: XEvent = mem::uninitialized();
 
+            #[allow(non_snake_case)]
             let XFixesSetSelectionOwnerNotifyMask = (1 as c_long) << 0;
+            #[allow(non_snake_case)]
             let XFixesSelectionNotify = 0;
 
             assert!(XFixesQueryExtension(self.display, &mut event_base, &mut error_base) != 0);
