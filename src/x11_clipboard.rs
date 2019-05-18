@@ -5,6 +5,11 @@ use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_ulong};
 use std::thread;
+use x11::xlib::XAllocClassHint;
+use x11::xlib::XClassHint;
+use x11::xlib::XFetchName;
+use x11::xlib::XGetClassHint;
+use x11::xlib::XGetSelectionOwner;
 use x11::xlib::{
     AnyPropertyType, Atom, CurrentTime, Display, False, SelectionNotify, Window, XCloseDisplay,
     XConvertSelection, XCreateSimpleWindow, XDefaultRootWindow, XDeleteProperty, XDestroyWindow,
@@ -13,11 +18,17 @@ use x11::xlib::{
 };
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case", tag = "type", content = "data")]
+#[serde(rename_all = "snake_case", tag = "type")]
 enum ClipboardData {
-    Html(String),
+    Html {
+        owner: String,
+        content: String,
+    },
     #[serde(rename = "text")]
-    UnicodeText(String),
+    UnicodeText {
+        owner: String,
+        content: String,
+    },
 }
 
 pub struct Clipboard {
@@ -268,10 +279,21 @@ impl Clipboard {
                                 self.get_clipboard(clipboard_id, *target_id.unwrap(), &mut event);
 
                             if clipboard_data.is_some() {
+                                let owner = XGetSelectionOwner(self.display, clipboard_id);
+                                let mut owner_title: *mut c_char = mem::uninitialized();
+                                XFetchName(self.display, owner, &mut owner_title);
+                                let owner_title =
+                                    CString::from_raw(owner_title).to_str().unwrap().to_string();
                                 let clipboard_data = if targets.get("text/html").is_some() {
-                                    ClipboardData::Html(clipboard_data.unwrap())
+                                    ClipboardData::Html {
+                                        owner: owner_title,
+                                        content: clipboard_data.unwrap(),
+                                    }
                                 } else {
-                                    ClipboardData::UnicodeText(clipboard_data.unwrap())
+                                    ClipboardData::UnicodeText {
+                                        owner: owner_title,
+                                        content: clipboard_data.unwrap(),
+                                    }
                                 };
                                 thread::spawn(move || {
                                     if let Err(e) = save_clipboard_to_file(clipboard_data) {
