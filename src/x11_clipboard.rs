@@ -227,7 +227,7 @@ impl Clipboard {
         None
     }
 
-    pub fn watch_clipboard(&self) {
+    pub fn watch_clipboard(&self) -> Result<(), &'static str> {
         unsafe {
             let clipboard_id =
                 XInternAtom(self.display, CString::new("CLIPBOARD").unwrap().as_ptr(), 0);
@@ -240,7 +240,10 @@ impl Clipboard {
             #[allow(non_snake_case)]
             let XFixesSelectionNotify = 0;
 
-            assert!(XFixesQueryExtension(self.display, &mut event_base, &mut error_base) != 0);
+            if XFixesQueryExtension(self.display, &mut event_base, &mut error_base) == 0 {
+                return Err("Could not use XFixes extenion");
+            }
+
             XFixesSelectSelectionInput(
                 self.display,
                 self.window,

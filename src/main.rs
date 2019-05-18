@@ -6,7 +6,7 @@ mod x11_clipboard;
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dpy = x11_clipboard::Clipboard::new()?;
-    dpy.watch_clipboard();
+    dpy.watch_clipboard()?;
     Ok(())
 }
 
