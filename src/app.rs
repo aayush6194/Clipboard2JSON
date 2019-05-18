@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::fs::OpenOptions;
+use std::io::{self, BufReader};
 use std::mem;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_ulong};
+use std::thread;
 use x11::xlib::{
     AnyPropertyType, Atom, CurrentTime, Display, False, SelectionNotify, Window, XCloseDisplay,
     XConvertSelection, XCreateSimpleWindow, XDefaultRootWindow, XDeleteProperty, XDestroyWindow,
@@ -251,11 +254,31 @@ impl Clipboard {
 
                     if clipboard_data.is_some() {
                         let clipboard_data = ClipboardData::Text(clipboard_data.unwrap());
+
+                        thread::spawn(move || {
+                            if let Err(_) = save_clipboard_to_file(clipboard_data) {
+                                // log the error?
+                            }
+                        });
                     }
                 }
             }
         }
     }
+}
+
+fn save_clipboard_to_file(data: ClipboardData) -> Result<(), io::Error> {
+    let mut file = OpenOptions::new()
+        .read(true)
+        .create(true)
+        .open("clipboard.json")?;
+    let reader = BufReader::new(&mut file);
+    let mut stored_data: Vec<ClipboardData> = serde_json::from_reader(reader).unwrap_or_default();
+    stored_data.push(data);
+    drop(file);
+    let file = std::fs::File::create("clipboard.json")?;
+    serde_json::to_writer_pretty(file, &stored_data)?;
+    Ok(())
 }
 
 impl Drop for Clipboard {
