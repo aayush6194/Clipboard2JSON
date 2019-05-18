@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem;
@@ -9,7 +10,14 @@ use x11::xlib::{
     XA_ATOM,
 };
 
-pub struct App {
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "snake_case", tag = "type", content = "data")]
+enum ClipboardData {
+    #[serde(rename = "text")]
+    Text(String),
+}
+
+pub struct Clipboard {
     display: *mut Display,
     window: Window,
     prop_id: Atom,
@@ -20,7 +28,7 @@ extern "C" {
     fn XFixesQueryExtension(_3: *mut Display, _2: *mut c_int, _1: *mut c_int) -> c_int;
 }
 
-impl App {
+impl Clipboard {
     pub fn new() -> Result<Self, &'static str> {
         let display = unsafe { XOpenDisplay(std::ptr::null()) };
 
@@ -45,7 +53,7 @@ impl App {
         let prop_id =
             unsafe { XInternAtom(display, CString::new("XSEL_DATA").unwrap().as_ptr(), False) };
 
-        Ok(App {
+        Ok(Clipboard {
             display,
             window,
             prop_id,
@@ -140,6 +148,80 @@ impl App {
         }
     }
 
+    pub fn get_clipboard(&self, clipboard_id: Atom, event: &mut XEvent) -> Option<String> {
+        let targets = self.get_targets();
+        let target_id = targets
+            .get("text/html")
+            .or_else(|| targets.get("UTF8_STRING"));
+        if target_id.is_some() {
+            unsafe {
+                let incr_id = XInternAtom(self.display, CString::new("INCR").unwrap().as_ptr(), 0);
+
+                XConvertSelection(
+                    self.display,
+                    clipboard_id,
+                    *target_id.unwrap(),
+                    self.prop_id,
+                    self.window,
+                    CurrentTime,
+                );
+
+                loop {
+                    XNextEvent(self.display, event);
+
+                    if event.type_ == SelectionNotify {
+                        break;
+                    }
+                }
+
+                if event.selection.property != 0 {
+                    let mut return_type_id: Atom = mem::uninitialized();
+                    let mut return_format: c_int = 0;
+                    let mut returned_items: c_ulong = 0;
+                    let mut bytes_left: c_ulong = 0;
+                    let mut result: *mut c_uchar = mem::uninitialized();
+
+                    XGetWindowProperty(
+                        self.display,
+                        self.window,
+                        self.prop_id,
+                        0,
+                        0,
+                        False,
+                        AnyPropertyType as u64,
+                        &mut return_type_id,
+                        &mut return_format,
+                        &mut returned_items,
+                        &mut bytes_left,
+                        &mut result,
+                    );
+
+                    if return_type_id != incr_id {
+                        XGetWindowProperty(
+                            self.display,
+                            self.window,
+                            self.prop_id,
+                            0,
+                            bytes_left as i64 * mem::size_of::<c_char>() as i64,
+                            False,
+                            AnyPropertyType as u64,
+                            &mut return_type_id,
+                            &mut return_format,
+                            &mut returned_items,
+                            &mut bytes_left,
+                            &mut result,
+                        );
+
+                        let data = CString::from_raw(result as *mut c_char);
+                        let data = data.to_str().unwrap();
+                        return Some(data.to_owned());
+                    };
+                };
+            }
+        };
+        None
+    }
+
     pub fn watch_clipboard(&self) {
         unsafe {
             let clipboard_id =
@@ -165,71 +247,10 @@ impl App {
                 XNextEvent(self.display, &mut event);
 
                 if event.type_ == event_base + XFixesSelectionNotify {
-                    let targets = self.get_targets();
-                    let target_id = targets
-                        .get("text/html")
-                        .or_else(|| targets.get("UTF8_STRING"));
-                    if target_id.is_some() {
-                        let incr_id =
-                            XInternAtom(self.display, CString::new("INCR").unwrap().as_ptr(), 0);
+                    let clipboard_data = self.get_clipboard(clipboard_id, &mut event);
 
-                        XConvertSelection(
-                            self.display,
-                            clipboard_id,
-                            *target_id.unwrap(),
-                            self.prop_id,
-                            self.window,
-                            CurrentTime,
-                        );
-
-                        loop {
-                            XNextEvent(self.display, &mut event);
-
-                            if event.type_ == SelectionNotify {
-                                break;
-                            }
-                        }
-
-                        if event.selection.property != 0 {
-                            let mut return_type_id: Atom = mem::uninitialized();
-                            let mut return_format: c_int = 0;
-                            let mut returned_items: c_ulong = 0;
-                            let mut bytes_left: c_ulong = 0;
-                            let mut result: *mut c_uchar = mem::uninitialized();
-
-                            XGetWindowProperty(
-                                self.display,
-                                self.window,
-                                self.prop_id,
-                                0,
-                                0,
-                                False,
-                                AnyPropertyType as u64,
-                                &mut return_type_id,
-                                &mut return_format,
-                                &mut returned_items,
-                                &mut bytes_left,
-                                &mut result,
-                            );
-
-                            if return_type_id != incr_id {
-                                XGetWindowProperty(
-                                    self.display,
-                                    self.window,
-                                    self.prop_id,
-                                    0,
-                                    bytes_left as i64 * mem::size_of::<c_char>() as i64,
-                                    False,
-                                    AnyPropertyType as u64,
-                                    &mut return_type_id,
-                                    &mut return_format,
-                                    &mut returned_items,
-                                    &mut bytes_left,
-                                    &mut result,
-                                );
-                                println!("{:?}", CString::from_raw(result as *mut c_char));
-                            }
-                        }
+                    if clipboard_data.is_some() {
+                        let clipboard_data = ClipboardData::Text(clipboard_data.unwrap());
                     }
                 }
             }
@@ -237,7 +258,7 @@ impl App {
     }
 }
 
-impl Drop for App {
+impl Drop for Clipboard {
     fn drop(&mut self) {
         unsafe {
             XDeleteProperty(self.display, self.window, self.prop_id);
