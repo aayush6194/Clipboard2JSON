@@ -16,8 +16,9 @@ use x11::xlib::{
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case", tag = "type", content = "data")]
 enum ClipboardData {
+    Html(String),
     #[serde(rename = "text")]
-    Text(String),
+    UnicodeText(String),
 }
 
 pub struct Clipboard {
@@ -151,45 +152,61 @@ impl Clipboard {
         }
     }
 
-    pub fn get_clipboard(&self, clipboard_id: Atom, event: &mut XEvent) -> Option<String> {
-        let targets = self.get_targets();
-        let target_id = targets
-            .get("text/html")
-            .or_else(|| targets.get("UTF8_STRING"));
-        if target_id.is_some() {
-            unsafe {
-                let incr_id = XInternAtom(self.display, CString::new("INCR").unwrap().as_ptr(), 0);
+    pub fn get_clipboard(
+        &self,
+        clipboard_id: Atom,
+        target_id: Atom,
+        event: &mut XEvent,
+    ) -> Option<String> {
+        unsafe {
+            let incr_id = XInternAtom(self.display, CString::new("INCR").unwrap().as_ptr(), 0);
 
-                XConvertSelection(
+            XConvertSelection(
+                self.display,
+                clipboard_id,
+                target_id,
+                self.prop_id,
+                self.window,
+                CurrentTime,
+            );
+
+            loop {
+                XNextEvent(self.display, event);
+
+                if event.type_ == SelectionNotify {
+                    break;
+                }
+            }
+
+            if event.selection.property != 0 {
+                let mut return_type_id: Atom = mem::uninitialized();
+                let mut return_format: c_int = 0;
+                let mut returned_items: c_ulong = 0;
+                let mut bytes_left: c_ulong = 0;
+                let mut result: *mut c_uchar = mem::uninitialized();
+
+                XGetWindowProperty(
                     self.display,
-                    clipboard_id,
-                    *target_id.unwrap(),
-                    self.prop_id,
                     self.window,
-                    CurrentTime,
+                    self.prop_id,
+                    0,
+                    0,
+                    False,
+                    AnyPropertyType as u64,
+                    &mut return_type_id,
+                    &mut return_format,
+                    &mut returned_items,
+                    &mut bytes_left,
+                    &mut result,
                 );
 
-                loop {
-                    XNextEvent(self.display, event);
-
-                    if event.type_ == SelectionNotify {
-                        break;
-                    }
-                }
-
-                if event.selection.property != 0 {
-                    let mut return_type_id: Atom = mem::uninitialized();
-                    let mut return_format: c_int = 0;
-                    let mut returned_items: c_ulong = 0;
-                    let mut bytes_left: c_ulong = 0;
-                    let mut result: *mut c_uchar = mem::uninitialized();
-
+                if return_type_id != incr_id {
                     XGetWindowProperty(
                         self.display,
                         self.window,
                         self.prop_id,
                         0,
-                        0,
+                        bytes_left as i64 * mem::size_of::<c_char>() as i64,
                         False,
                         AnyPropertyType as u64,
                         &mut return_type_id,
@@ -199,29 +216,12 @@ impl Clipboard {
                         &mut result,
                     );
 
-                    if return_type_id != incr_id {
-                        XGetWindowProperty(
-                            self.display,
-                            self.window,
-                            self.prop_id,
-                            0,
-                            bytes_left as i64 * mem::size_of::<c_char>() as i64,
-                            False,
-                            AnyPropertyType as u64,
-                            &mut return_type_id,
-                            &mut return_format,
-                            &mut returned_items,
-                            &mut bytes_left,
-                            &mut result,
-                        );
-
-                        let data = CString::from_raw(result as *mut c_char);
-                        let data = data.to_str().unwrap();
-                        return Some(data.to_owned());
-                    };
+                    let data = CString::from_raw(result as *mut c_char);
+                    let data = data.to_str().unwrap();
+                    return Some(data.to_owned());
                 };
-            }
-        };
+            };
+        }
         None
     }
 
@@ -250,16 +250,26 @@ impl Clipboard {
                 XNextEvent(self.display, &mut event);
 
                 if event.type_ == event_base + XFixesSelectionNotify {
-                    let clipboard_data = self.get_clipboard(clipboard_id, &mut event);
+                    let targets = self.get_targets();
+                    let target_id = targets
+                        .get("text/html")
+                        .or_else(|| targets.get("UTF8_STRING"));
+                    if target_id.is_some() {
+                        let clipboard_data =
+                            self.get_clipboard(clipboard_id, *target_id.unwrap(), &mut event);
 
-                    if clipboard_data.is_some() {
-                        let clipboard_data = ClipboardData::Text(clipboard_data.unwrap());
-
-                        thread::spawn(move || {
-                            if let Err(_) = save_clipboard_to_file(clipboard_data) {
-                                // log the error?
-                            }
-                        });
+                        if clipboard_data.is_some() {
+                            let clipboard_data = if targets.get("text/html").is_some() {
+                                ClipboardData::Html(clipboard_data.unwrap())
+                            } else {
+                                ClipboardData::UnicodeText(clipboard_data.unwrap())
+                            };
+                            thread::spawn(move || {
+                                if let Err(e) = save_clipboard_to_file(clipboard_data) {
+                                    eprintln!("Error while trying to save the file {}", e);
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -270,6 +280,7 @@ impl Clipboard {
 fn save_clipboard_to_file(data: ClipboardData) -> Result<(), io::Error> {
     let mut file = OpenOptions::new()
         .read(true)
+        .write(true)
         .create(true)
         .open("clipboard.json")?;
     let reader = BufReader::new(&mut file);
