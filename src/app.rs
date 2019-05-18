@@ -5,6 +5,7 @@ use x11::xlib::*;
 pub struct App {
     display: *mut Display,
     window: Window,
+    prop_id: Atom,
 }
 
 impl App {
@@ -29,7 +30,14 @@ impl App {
             )
         };
 
-        Ok(App { display, window })
+        let prop_id =
+            unsafe { XInternAtom(display, CString::new("XSEL_DATA").unwrap().as_ptr(), False) };
+
+        Ok(App {
+            display,
+            window,
+            prop_id,
+        })
     }
 
     pub fn get_targets(&self) -> HashMap<String, Atom> {
@@ -39,13 +47,6 @@ impl App {
             XInternAtom(
                 self.display,
                 CString::new("TARGETS").unwrap().as_ptr(),
-                False,
-            )
-        };
-        let prop_id = unsafe {
-            XInternAtom(
-                self.display,
-                CString::new("XSEL_DATA").unwrap().as_ptr(),
                 False,
             )
         };
@@ -63,7 +64,7 @@ impl App {
                 self.display,
                 clipboard_id,
                 targets_id,
-                prop_id,
+                self.prop_id,
                 self.window,
                 CurrentTime,
             );
@@ -88,7 +89,7 @@ impl App {
                 XGetWindowProperty(
                     self.display,
                     self.window,
-                    prop_id,
+                    self.prop_id,
                     0,
                     0,
                     False,
@@ -103,7 +104,7 @@ impl App {
                 XGetWindowProperty(
                     self.display,
                     self.window,
-                    prop_id,
+                    self.prop_id,
                     0,
                     bytes_left as i64 * std::mem::size_of::<Atom>() as i64,
                     False,
@@ -125,8 +126,6 @@ impl App {
                 }
             }
 
-            XDeleteProperty(self.display, self.window, prop_id);
-
             targets
         }
     }
@@ -139,8 +138,6 @@ impl App {
                 .or_else(|| targets.get("UTF8_STRING"));
 
             if target_id.is_some() {
-                let prop_id =
-                    XInternAtom(self.display, CString::new("XSEL_DATA").unwrap().as_ptr(), 0);
                 let clipboard_id =
                     XInternAtom(self.display, CString::new("CLIPBOARD").unwrap().as_ptr(), 0);
                 let incr_id = XInternAtom(self.display, CString::new("INCR").unwrap().as_ptr(), 0);
@@ -149,7 +146,7 @@ impl App {
                     self.display,
                     clipboard_id,
                     *target_id.unwrap(),
-                    prop_id,
+                    self.prop_id,
                     self.window,
                     CurrentTime,
                 );
@@ -175,7 +172,7 @@ impl App {
                     XGetWindowProperty(
                         self.display,
                         self.window,
-                        prop_id,
+                        self.prop_id,
                         0,
                         0,
                         False,
@@ -191,7 +188,7 @@ impl App {
                         XGetWindowProperty(
                             self.display,
                             self.window,
-                            prop_id,
+                            self.prop_id,
                             0,
                             bytes_left as i64 * std::mem::size_of::<c_char>() as i64,
                             False,
@@ -213,6 +210,7 @@ impl App {
 impl Drop for App {
     fn drop(&mut self) {
         unsafe {
+            XDeleteProperty(self.display, self.window, self.prop_id);
             XDestroyWindow(self.display, self.window);
             XCloseDisplay(self.display);
         }
