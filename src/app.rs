@@ -1,7 +1,13 @@
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::os::raw::{c_int, c_long, c_ulong};
-use x11::xlib::*;
+use std::mem;
+use std::os::raw::{c_char, c_int, c_long, c_uchar, c_ulong};
+use x11::xlib::{
+    AnyPropertyType, Atom, CurrentTime, Display, False, SelectionNotify, Window, XCloseDisplay,
+    XConvertSelection, XCreateSimpleWindow, XDefaultRootWindow, XDeleteProperty, XDestroyWindow,
+    XEvent, XGetAtomName, XGetWindowProperty, XInternAtom, XNextEvent, XOpenDisplay, XSelectInput,
+    XA_ATOM,
+};
 
 pub struct App {
     display: *mut Display,
@@ -48,7 +54,7 @@ impl App {
 
     pub fn get_targets(&self) -> HashMap<String, Atom> {
         let mut targets = HashMap::default();
-        let mut event: XEvent = unsafe { std::mem::uninitialized() };
+        let mut event: XEvent = unsafe { mem::uninitialized() };
         let targets_id = unsafe {
             XInternAtom(
                 self.display,
@@ -84,13 +90,11 @@ impl App {
             }
 
             if event.selection.property != 0 {
-                use std::os::raw::*;
-
-                let mut return_type_id: Atom = std::mem::uninitialized();
+                let mut return_type_id: Atom = mem::uninitialized();
                 let mut return_format: c_int = 0;
                 let mut returned_items: c_ulong = 0;
                 let mut bytes_left: c_ulong = 0;
-                let mut result: *mut c_uchar = std::mem::uninitialized();
+                let mut result: *mut c_uchar = mem::uninitialized();
 
                 XGetWindowProperty(
                     self.display,
@@ -112,7 +116,7 @@ impl App {
                     self.window,
                     self.prop_id,
                     0,
-                    bytes_left as i64 * std::mem::size_of::<Atom>() as i64,
+                    bytes_left as i64 * mem::size_of::<Atom>() as i64,
                     False,
                     XA_ATOM,
                     &mut return_type_id,
@@ -122,7 +126,7 @@ impl App {
                     &mut result,
                 );
 
-                let result = std::mem::transmute::<_, *mut u64>(result);
+                let result = mem::transmute::<_, *mut u64>(result);
 
                 for i in 0..returned_items {
                     let atom: Atom = *result.offset(i as isize) as Atom;
@@ -140,9 +144,9 @@ impl App {
         unsafe {
             let clipboard_id =
                 XInternAtom(self.display, CString::new("CLIPBOARD").unwrap().as_ptr(), 0);
-            let mut event_base = std::mem::uninitialized();
-            let mut error_base = std::mem::uninitialized();
-            let mut event: XEvent = std::mem::uninitialized();
+            let mut event_base = mem::uninitialized();
+            let mut error_base = mem::uninitialized();
+            let mut event: XEvent = mem::uninitialized();
 
             let XFixesSetSelectionOwnerNotifyMask = (1 as c_long) << 0;
             let XFixesSelectionNotify = 0;
@@ -185,13 +189,11 @@ impl App {
                         }
 
                         if event.selection.property != 0 {
-                            use std::os::raw::*;
-
-                            let mut return_type_id: Atom = std::mem::uninitialized();
+                            let mut return_type_id: Atom = mem::uninitialized();
                             let mut return_format: c_int = 0;
                             let mut returned_items: c_ulong = 0;
                             let mut bytes_left: c_ulong = 0;
-                            let mut result: *mut c_uchar = std::mem::uninitialized();
+                            let mut result: *mut c_uchar = mem::uninitialized();
 
                             XGetWindowProperty(
                                 self.display,
@@ -214,7 +216,7 @@ impl App {
                                     self.window,
                                     self.prop_id,
                                     0,
-                                    bytes_left as i64 * std::mem::size_of::<c_char>() as i64,
+                                    bytes_left as i64 * mem::size_of::<c_char>() as i64,
                                     False,
                                     AnyPropertyType as u64,
                                     &mut return_type_id,
