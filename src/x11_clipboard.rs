@@ -356,8 +356,8 @@ impl ClipboardFunctions for Clipboard {
     }
 }
 
-/// Call the drop function to destroy the window and close the connection to the XServer.
 impl Drop for Clipboard {
+    /// Call the drop function to destroy the window and close the connection to the XServer.
     fn drop(&mut self) {
         unsafe {
             XDeleteProperty(self.display, self.window, self.prop_id);
