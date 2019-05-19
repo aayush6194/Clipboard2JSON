@@ -1,4 +1,6 @@
-use clipboard_rs::{utils, Clipboard, ClipboardFunctions};
+mod utils;
+
+use clipboard_rs::{Clipboard, ClipboardFunctions};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dpy = Clipboard::new()?;
