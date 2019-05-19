@@ -60,7 +60,7 @@ impl Clipboard {
     /// Gets a hashmap of content type targets along with their atom identifier
     /// that the clipboard owner can convert the data to. The current implementation
     /// only handles HTML and text based formats i.e. text/html, UTF8_STRING, TEXT
-    pub fn get_targets(&self) -> Result<HashMap<String, Atom>, Error> {
+    fn get_targets(&self) -> Result<HashMap<String, Atom>, Error> {
         unsafe {
             let mut event: XEvent = mem::uninitialized();
             let targets_id = XInternAtom(self.display, CString::new("TARGETS")?.as_ptr(), False);
@@ -150,7 +150,7 @@ impl Clipboard {
 
     /// Fetches the data stored in the clipboard according to the `target_id` which
     /// represents the target format the selection needs to be converted.
-    pub fn get_clipboard(
+    fn get_clipboard(
         &self,
         clipboard_id: Atom,
         target_id: Atom,
@@ -278,10 +278,10 @@ impl ClipboardFunctions for Clipboard {
     }
 
     /// Fetches the selection stored in the clipboard if it can converted to a text-based format
-    /// 
+    ///
     /// This method tries to convert the selection into a text-based format. If
     /// a non-text format like image copied to the clipboard and the selection
-    /// owner is a browser then the owner might be able to convert into a HTML img 
+    /// owner is a browser then the owner might be able to convert into a HTML img
     /// tag with the source pointing to the URL of the image.
     fn get_clipboard(&self) -> Result<ClipboardData, Error> {
         let targets = self.get_targets()?;
