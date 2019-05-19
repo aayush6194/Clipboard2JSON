@@ -4,6 +4,8 @@ use std::error::Error;
 use std::fs::{File, OpenOptions};
 use std::io::BufReader;
 
+/// Reads the stored clipboard data, appends the new incoming data, and
+/// overwrites the JSON file.
 pub fn save_clipboard_to_file<T>(data: T) -> Result<(), Box<dyn Error>>
 where
     T: DeserializeOwned + Serialize,
@@ -16,8 +18,10 @@ where
     let reader = BufReader::new(&mut file);
     let mut stored_data: Vec<T> = serde_json::from_reader(reader).unwrap_or_default();
     stored_data.push(data);
-    drop(file);
+    drop(file); // closes the file so we can overwrite it
     let file = File::create("clipboard.json")?;
     serde_json::to_writer_pretty(file, &stored_data)?;
     Ok(())
 }
+
+// TODO: Write a function that can store it to some external API?

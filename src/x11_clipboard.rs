@@ -12,6 +12,13 @@ use x11::xlib::{
     XNextEvent, XOpenDisplay, XSelectInput, XA_ATOM,
 };
 
+/// Represents the textual data stored in clipboard as either HTML or UTF8.  
+///
+/// If the clipboard data can be converted to HTML, the owner also includes
+/// the enclosing HTML tags around the content which can be used to format the
+/// content differently. Also, the clipboard owner can convert types such as images
+/// to an img tag with the URL for the image.Unlike the Win API, there does not
+/// seem to be an easy way of getting the URL of the HTML document in X11.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum ClipboardData {
@@ -28,18 +35,30 @@ pub enum ClipboardData {
     },
 }
 
+/// Represents a windowless X11 Client and its connection to the X11 Server.
+///
+/// Please note that it does not currently handle large buffers.
 pub struct Clipboard {
+    /// Connection to the X11 Server
     display: *mut Display,
+    /// Unmapped subwindow which is used for listening to events
     window: Window,
+    /// Property on the window for reading the selection
     prop_id: Atom,
 }
 
+/// Functions from the XFixes extension that are used to notify the
+/// window when the clipboard content chagnes. These functions are currently
+/// not included in the X11 bindings.
 extern "C" {
     fn XFixesSelectSelectionInput(_4: *mut Display, _3: Window, _2: Atom, _1: c_ulong);
     fn XFixesQueryExtension(_3: *mut Display, _2: *mut c_int, _1: *mut c_int) -> c_int;
 }
 
 impl Clipboard {
+    /// Gets a hashmap of content type targets along with their atom identifier
+    /// that the clipboard owner can convert the data to. The current implementation
+    /// only handles HTML and text based formats i.e. text/html, UTF8_STRING, TEXT
     pub fn get_targets(&self) -> Option<HashMap<String, Atom>> {
         let mut event: XEvent = unsafe { mem::uninitialized() };
         let targets_id = unsafe {
@@ -58,7 +77,9 @@ impl Clipboard {
         };
 
         unsafe {
+            // Listen to event when the selection is transferred
             XSelectInput(self.display, self.window, SelectionNotify.into());
+            // Request the owner to send the targets it can convert the clipboard to
             XConvertSelection(
                 self.display,
                 clipboard_id,
@@ -83,6 +104,7 @@ impl Clipboard {
                 let mut bytes_left: c_ulong = 0;
                 let mut result: *mut c_uchar = mem::uninitialized();
 
+                // Gets the size of targets to be transferred
                 XGetWindowProperty(
                     self.display,
                     self.window,
@@ -98,6 +120,7 @@ impl Clipboard {
                     &mut result,
                 );
 
+                // Transfers the targets to the result with the specified size
                 XGetWindowProperty(
                     self.display,
                     self.window,
@@ -113,10 +136,14 @@ impl Clipboard {
                     &mut result,
                 );
 
+                // Atom is represented as a c_ulong (u64)
                 let result = mem::transmute::<_, *mut u64>(result);
 
                 let targets = (0..returned_items)
                     .map(|i| {
+                        // Result is a pointer to C Atoms. The offset is used to
+                        // get to the next atom. The returned_items guarantee
+                        // that only valid atoms will be accessed.
                         let atom: Atom = *result.offset(i as isize) as Atom;
                         let atom_name = XGetAtomName(self.display, atom);
                         let name = CString::from_raw(atom_name);
@@ -131,6 +158,8 @@ impl Clipboard {
         }
     }
 
+    /// Fetches the data stored in the clipboard according to the `target_id` which
+    /// represents the target format the selection needs to be converted.
     pub fn get_clipboard(
         &self,
         clipboard_id: Atom,
@@ -164,6 +193,7 @@ impl Clipboard {
                 let mut bytes_left: c_ulong = 0;
                 let mut result: *mut c_uchar = mem::uninitialized();
 
+                // Used to get the size and the type of the selection
                 XGetWindowProperty(
                     self.display,
                     self.window,
@@ -179,6 +209,8 @@ impl Clipboard {
                     &mut result,
                 );
 
+                // Copying large buffer is not currently implemented
+                // @TODO: Work with incr_id
                 if return_type_id != incr_id {
                     XGetWindowProperty(
                         self.display,
@@ -206,6 +238,10 @@ impl Clipboard {
 }
 
 impl ClipboardFunctions for Clipboard {
+    /// Creates a new instance of the clipboard.
+    /// 
+    /// Connects to the XServer and creates a unmapped window for requesting data
+    /// from the owner of the selection.
     fn new() -> Result<Self, &'static str> {
         let display = unsafe { XOpenDisplay(std::ptr::null()) };
 
@@ -237,6 +273,10 @@ impl ClipboardFunctions for Clipboard {
         })
     }
 
+    /// Watches the clipboard for changes and calls the callback function with
+    /// the clipboard data when the content changes. It depends on the XFixes
+    /// extension to request the XServer to notify the window whenever the selection
+    /// changes. 
     fn watch_clipboard(&self, callback: &ClipboardSink) {
         unsafe {
             let clipboard_id =
@@ -245,6 +285,7 @@ impl ClipboardFunctions for Clipboard {
             let mut error_base = mem::uninitialized();
             let mut event: XEvent = mem::uninitialized();
 
+            // Constant variables from the XFixes' header file
             #[allow(non_snake_case)]
             let XFixesSetSelectionOwnerNotifyMask = (1 as c_long) << 0;
             #[allow(non_snake_case)]
@@ -312,6 +353,7 @@ impl ClipboardFunctions for Clipboard {
     }
 }
 
+/// Call the drop function to destroy the window and close the connection to the XServer.
 impl Drop for Clipboard {
     fn drop(&mut self) {
         unsafe {
