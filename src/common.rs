@@ -8,6 +8,7 @@ pub trait ClipboardFunctions: Sized {
     /// Creates a new `Clipboard` with a pointer to the hidden window
     // @TODO: Better error handling?
     fn new() -> Result<Self, Error>;
+    /// Fetches the data stored in the clipboard as a text-based format
     fn get_clipboard(&self) -> Result<ClipboardData, Error>; 
     /// Watches over the clipboard and passes the changed data to the callback
     fn watch_clipboard(&self, callback: &ClipboardSink);
