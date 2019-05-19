@@ -1,3 +1,4 @@
+use crate::common::ClipboardFunctions;
 use crate::utils::save_clipboard_to_file;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -41,37 +42,6 @@ extern "C" {
 }
 
 impl Clipboard {
-    pub fn new() -> Result<Self, &'static str> {
-        let display = unsafe { XOpenDisplay(std::ptr::null()) };
-
-        if display.is_null() {
-            return Err("Could not open XDisplay");
-        }
-
-        let window = unsafe {
-            XCreateSimpleWindow(
-                display,
-                XDefaultRootWindow(display),
-                -10,
-                -10,
-                1,
-                1,
-                0,
-                0,
-                0,
-            )
-        };
-
-        let prop_id =
-            unsafe { XInternAtom(display, CString::new("XSEL_DATA").unwrap().as_ptr(), False) };
-
-        Ok(Clipboard {
-            display,
-            window,
-            prop_id,
-        })
-    }
-
     pub fn get_targets(&self) -> Option<HashMap<String, Atom>> {
         let mut event: XEvent = unsafe { mem::uninitialized() };
         let targets_id = unsafe {
@@ -235,8 +205,41 @@ impl Clipboard {
         }
         None
     }
+}
 
-    pub fn watch_clipboard(&self) -> Result<(), &'static str> {
+impl ClipboardFunctions for Clipboard {
+    fn new() -> Result<Self, &'static str> {
+        let display = unsafe { XOpenDisplay(std::ptr::null()) };
+
+        if display.is_null() {
+            return Err("Could not connect to XServer");
+        }
+
+        let window = unsafe {
+            XCreateSimpleWindow(
+                display,
+                XDefaultRootWindow(display),
+                -10,
+                -10,
+                1,
+                1,
+                0,
+                0,
+                0,
+            )
+        };
+
+        let prop_id =
+            unsafe { XInternAtom(display, CString::new("XSEL_DATA").unwrap().as_ptr(), False) };
+
+        Ok(Clipboard {
+            display,
+            window,
+            prop_id,
+        })
+    }
+
+    fn watch_clipboard(&self) {
         unsafe {
             let clipboard_id =
                 XInternAtom(self.display, CString::new("CLIPBOARD").unwrap().as_ptr(), 0);
@@ -250,7 +253,7 @@ impl Clipboard {
             let XFixesSelectionNotify = 0;
 
             if XFixesQueryExtension(self.display, &mut event_base, &mut error_base) == 0 {
-                return Err("Could not use XFixes extenion");
+                eprintln!("Could not use XFixes extenion");
             }
 
             XFixesSelectSelectionInput(
