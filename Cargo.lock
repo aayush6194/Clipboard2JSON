@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "clipboard_rs"
+name = "clipboard2json"
 version = "0.1.0"
 dependencies = [
  "pkg-config 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
