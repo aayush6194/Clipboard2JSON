@@ -292,7 +292,7 @@ impl ClipboardFunctions for Clipboard {
             let XFixesSelectionNotify = 0;
 
             if XFixesQueryExtension(self.display, &mut event_base, &mut error_base) == 0 {
-                eprintln!("Could not use XFixes extenion");
+                panic!("Could not use XFixes extenion");
             }
 
             XFixesSelectSelectionInput(
