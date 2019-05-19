@@ -277,6 +277,12 @@ impl ClipboardFunctions for Clipboard {
         })
     }
 
+    /// Fetches the selection stored in the clipboard if it can converted to a text-based format
+    /// 
+    /// This method tries to convert the selection into a text-based format. If
+    /// a non-text format like image copied to the clipboard and the selection
+    /// owner is a browser then the owner might be able to convert into a HTML img 
+    /// tag with the source pointing to the URL of the image.
     fn get_clipboard(&self) -> Result<ClipboardData, Error> {
         let targets = self.get_targets()?;
 
