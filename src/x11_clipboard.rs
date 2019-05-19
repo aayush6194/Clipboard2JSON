@@ -320,7 +320,7 @@ impl ClipboardFunctions for Clipboard {
     /// Watches the clipboard for changes and calls the callback function with
     /// the clipboard data when the content changes. It depends on the XFixes
     /// extension to request the XServer to notify the window whenever the selection
-    /// changes.
+    /// changes. It panics if it could not find the required extension.
     //  Based on the stackoverflow answer: https://stackoverflow.com/a/44992967
     fn watch_clipboard(&self, callback: &ClipboardSink) {
         unsafe {
