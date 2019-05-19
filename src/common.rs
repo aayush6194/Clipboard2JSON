@@ -1,5 +1,5 @@
 use crate::ClipboardData;
-use std::error::Error;
+use failure::Error;
 
 /// Defines common traits for the clipboard so that it's easier to abstract over
 /// the underlying libraries. 
@@ -7,10 +7,11 @@ use std::error::Error;
 pub trait ClipboardFunctions: Sized {
     /// Creates a new `Clipboard` with a pointer to the hidden window
     // @TODO: Better error handling?
-    fn new() -> Result<Self, &'static str>;
+    fn new() -> Result<Self, Error>;
+    fn get_clipboard(&self) -> Result<ClipboardData, Error>; 
     /// Watches over the clipboard and passes the changed data to the callback
     fn watch_clipboard(&self, callback: &ClipboardSink);
 }
 
 /// Takes the clipboard data and writes it to a source
-pub type ClipboardSink = Fn(ClipboardData) -> Result<(), Box<dyn Error>>;
+pub type ClipboardSink = Fn(ClipboardData) -> Result<(), Error>;

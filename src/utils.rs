@@ -1,12 +1,12 @@
+use failure::Error;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::error::Error;
 use std::fs::{File, OpenOptions};
 use std::io::BufReader;
 
 /// Reads the stored clipboard data, appends the new incoming data, and
 /// overwrites the JSON file.
-pub fn save_clipboard_to_file<T>(data: T) -> Result<(), Box<dyn Error>>
+pub fn save_clipboard_to_file<T>(data: T) -> Result<(), Error>
 where
     T: DeserializeOwned + Serialize,
 {
