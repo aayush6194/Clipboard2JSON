@@ -345,7 +345,7 @@ impl ClipboardFunctions for Clipboard {
                                     }
                                 };
                                 if let Err(e) = callback(clipboard_data) {
-                                    eprintln!("Error while trying to save the file {}", e);
+                                    panic!("Error while trying to save the file {}", e);
                                 };
                             }
                         }
