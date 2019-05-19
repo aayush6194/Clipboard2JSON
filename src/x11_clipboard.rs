@@ -282,18 +282,21 @@ impl Clipboard {
                                 XFetchName(self.display, owner, &mut owner_title);
                                 let owner_title =
                                     CString::from_raw(owner_title).to_str().unwrap().to_string();
-                                let created_at = SystemTime::now().duration_since(UNIX_EPOCH).expect("Oops went back in time").as_secs();
+                                let created_at = SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .expect("Oops went back in time")
+                                    .as_secs();
                                 let clipboard_data = if targets.get("text/html").is_some() {
                                     ClipboardData::Html {
                                         owner: owner_title,
                                         content: clipboard_data.unwrap(),
-                                        created_at
+                                        created_at,
                                     }
                                 } else {
                                     ClipboardData::UnicodeText {
                                         owner: owner_title,
                                         content: clipboard_data.unwrap(),
-                                        created_at
+                                        created_at,
                                     }
                                 };
                                 thread::spawn(move || {
