@@ -277,6 +277,7 @@ impl ClipboardFunctions for Clipboard {
     /// the clipboard data when the content changes. It depends on the XFixes
     /// extension to request the XServer to notify the window whenever the selection
     /// changes. 
+    //  Based on the stackoverflow answer: https://stackoverflow.com/a/44992967
     fn watch_clipboard(&self, callback: &ClipboardSink) {
         unsafe {
             let clipboard_id =
@@ -319,6 +320,8 @@ impl ClipboardFunctions for Clipboard {
                                 self.get_clipboard(clipboard_id, *target_id.unwrap(), &mut event);
 
                             if clipboard_data.is_some() {
+                                // Add extra metadata such as the clipboard owner
+                                // and when the selection was copied from the owner
                                 let owner = XGetSelectionOwner(self.display, clipboard_id);
                                 let mut owner_title: *mut c_char = mem::uninitialized();
                                 XFetchName(self.display, owner, &mut owner_title);
