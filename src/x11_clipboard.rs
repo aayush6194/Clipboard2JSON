@@ -5,6 +5,7 @@ use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_ulong};
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 use x11::xlib::{
     AnyPropertyType, Atom, CurrentTime, Display, False, SelectionNotify, Window, XCloseDisplay,
     XConvertSelection, XCreateSimpleWindow, XDefaultRootWindow, XDeleteProperty, XDestroyWindow,
@@ -18,11 +19,13 @@ enum ClipboardData {
     Html {
         owner: String,
         content: String,
+        created_at: u64,
     },
     #[serde(rename = "text")]
     UnicodeText {
         owner: String,
         content: String,
+        created_at: u64,
     },
 }
 
@@ -279,15 +282,18 @@ impl Clipboard {
                                 XFetchName(self.display, owner, &mut owner_title);
                                 let owner_title =
                                     CString::from_raw(owner_title).to_str().unwrap().to_string();
+                                let created_at = SystemTime::now().duration_since(UNIX_EPOCH).expect("Oops went back in time").as_secs();
                                 let clipboard_data = if targets.get("text/html").is_some() {
                                     ClipboardData::Html {
                                         owner: owner_title,
                                         content: clipboard_data.unwrap(),
+                                        created_at
                                     }
                                 } else {
                                     ClipboardData::UnicodeText {
                                         owner: owner_title,
                                         content: clipboard_data.unwrap(),
+                                        created_at
                                     }
                                 };
                                 thread::spawn(move || {
