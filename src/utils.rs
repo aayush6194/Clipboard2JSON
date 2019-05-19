@@ -1,9 +1,10 @@
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::error::Error;
 use std::fs::{File, OpenOptions};
-use std::io::{self, BufReader};
+use std::io::BufReader;
 
-pub fn save_clipboard_to_file<T>(data: T) -> Result<(), io::Error>
+pub fn save_clipboard_to_file<T>(data: T) -> Result<(), Box<dyn Error>>
 where
     T: DeserializeOwned + Serialize,
 {

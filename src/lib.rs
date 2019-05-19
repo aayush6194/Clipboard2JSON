@@ -1,5 +1,5 @@
-mod utils;
 mod common;
+pub mod utils;
 pub use common::ClipboardFunctions;
 
 #[cfg(target_os = "linux")]
@@ -10,3 +10,4 @@ pub mod winapi_clipboard;
 
 #[cfg(target_os = "linux")]
 pub type Clipboard = x11_clipboard::Clipboard;
+pub type ClipboardData = x11_clipboard::ClipboardData;

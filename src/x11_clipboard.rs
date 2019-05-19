@@ -1,11 +1,9 @@
-use crate::common::ClipboardFunctions;
-use crate::utils::save_clipboard_to_file;
+use crate::common::{ClipboardFunctions, ClipboardSink};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_ulong};
-use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 use x11::xlib::{
     AnyPropertyType, Atom, CurrentTime, Display, False, SelectionNotify, Window, XCloseDisplay,
@@ -16,7 +14,7 @@ use x11::xlib::{
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
-enum ClipboardData {
+pub enum ClipboardData {
     Html {
         owner: String,
         content: String,
@@ -239,7 +237,7 @@ impl ClipboardFunctions for Clipboard {
         })
     }
 
-    fn watch_clipboard(&self) {
+    fn watch_clipboard(&self, callback: &ClipboardSink) {
         unsafe {
             let clipboard_id =
                 XInternAtom(self.display, CString::new("CLIPBOARD").unwrap().as_ptr(), 0);
@@ -302,11 +300,9 @@ impl ClipboardFunctions for Clipboard {
                                         created_at,
                                     }
                                 };
-                                thread::spawn(move || {
-                                    if let Err(e) = save_clipboard_to_file(clipboard_data) {
-                                        eprintln!("Error while trying to save the file {}", e);
-                                    }
-                                });
+                                if let Err(e) = callback(clipboard_data) {
+                                    eprintln!("Error while trying to save the file {}", e);
+                                };
                             }
                         }
                     }
