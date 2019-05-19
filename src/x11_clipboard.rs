@@ -5,16 +5,11 @@ use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_ulong};
 use std::thread;
-use x11::xlib::XAllocClassHint;
-use x11::xlib::XClassHint;
-use x11::xlib::XFetchName;
-use x11::xlib::XGetClassHint;
-use x11::xlib::XGetSelectionOwner;
 use x11::xlib::{
     AnyPropertyType, Atom, CurrentTime, Display, False, SelectionNotify, Window, XCloseDisplay,
     XConvertSelection, XCreateSimpleWindow, XDefaultRootWindow, XDeleteProperty, XDestroyWindow,
-    XEvent, XGetAtomName, XGetWindowProperty, XInternAtom, XNextEvent, XOpenDisplay, XSelectInput,
-    XA_ATOM,
+    XEvent, XFetchName, XGetAtomName, XGetSelectionOwner, XGetWindowProperty, XInternAtom,
+    XNextEvent, XOpenDisplay, XSelectInput, XA_ATOM,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
