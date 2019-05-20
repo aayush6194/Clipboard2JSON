@@ -212,7 +212,7 @@ impl ClipboardFunctions for ClipboardOwner {
                 if ret == 0 {
                     break;
                 } else if ret == -1 {
-                    eprint!(
+                    eprintln!(
                         "An error occured while retrieving message {}",
                         io::Error::last_os_error()
                     );
