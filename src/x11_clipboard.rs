@@ -353,7 +353,7 @@ impl ClipboardFunctions for Clipboard {
                 if event.type_ == event_base + XFixesSelectionNotify {
                     let clipboard_data = ClipboardFunctions::get_clipboard(self).unwrap();
 
-                    if let Err(e) = callback(clipboard_data) {
+                    if let Err(e) = callback.0(clipboard_data) {
                         eprintln!("An error has occured in the callback function {}", e);
                     }
                 }
