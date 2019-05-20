@@ -67,16 +67,16 @@ impl Clipboard {
                     bail!(io::Error::last_os_error());
                 }
                 let data_str = std::ffi::CString::from_raw(data as *mut i8).into_string()?;
-                let c = HTML_RE.captures(&data_str).ok_or(format_err!(
+                let captures = HTML_RE.captures(&data_str).ok_or(format_err!(
                     "An error occured while using regex on the HTML clipboard data"
                 ))?;
                 let fragment = data_str
-                    .get(c[1].parse::<usize>()?..c[2].parse::<usize>()?)
+                    .get(captures[1].parse::<usize>()?..captures[2].parse::<usize>()?)
                     .ok_or(format_err!(
                         "An error occured while trying to get the start and end fragments"
                     ))?
                     .to_string();
-                let source_url = c
+                let source_url = captures
                     .name("url")
                     .map_or(None, |url| Some(url.as_str().to_string()));
                 GlobalUnlock(data);
@@ -90,10 +90,10 @@ impl Clipboard {
                 if data.is_null() {
                     bail!(io::Error::last_os_error());
                 }
-                let len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
-                let v = Vec::from_raw_parts(data as *mut u16, len, len);
+                let data_len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
+                let raw_data = Vec::from_raw_parts(data as *mut u16, data_len, data_len);
                 GlobalUnlock(data);
-                let data = String::from_utf16(&v)?;
+                let data = String::from_utf16(&raw_data)?;
                 Ok(ClipboardData::new((data, None)))
             } else {
                 bail!("Non-text format not available")
