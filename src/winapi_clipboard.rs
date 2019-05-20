@@ -24,14 +24,14 @@ use winapi::um::winuser::{
 };
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type", content = "data")]
+#[serde(rename_all = "snake_case", tag = "type")]
 pub enum ClipboardData {
     Html {
         url: Option<String>,
         content: String,
     },
     #[serde(rename = "text")]
-    UnicodeText(String),
+    UnicodeText { content: String },
 }
 
 pub struct Clipboard {
@@ -95,7 +95,9 @@ impl Clipboard {
                 let len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
                 let v = Vec::from_raw_parts(data as *mut u16, len, len);
                 GlobalUnlock(data);
-                Ok(ClipboardData::UnicodeText(String::from_utf16(&v)?))
+                Ok(ClipboardData::UnicodeText {
+                    content: String::from_utf16(&v)?,
+                })
             } else {
                 Err(format_err!("Non-text format not available"))
             };
