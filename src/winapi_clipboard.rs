@@ -1,9 +1,10 @@
 use crate::common::{ClipboardData, ClipboardFunctions, ClipboardSink};
-use failure::{format_err, Error};
+use failure::{bail, format_err, Error};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::HashSet;
 use std::ffi::OsStr;
+use std::io;
 use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr::null_mut;
@@ -44,11 +45,11 @@ impl Clipboard {
         formats
     }
 
-    fn get_clipboard(&mut self) -> Result<ClipboardData, Error> {
+    fn get_clipboard(&self) -> Result<ClipboardData, Error> {
         let formats = Clipboard::get_formats();
         unsafe {
             if OpenClipboard(null_mut()) == 0 {
-                return Err(format_err!("An error occured while opening the clipboard"));
+                bail!(io::Error::last_os_error());
             }
             // check for CF_CLIPBOARD
             let html_wide: Vec<u16> = OsStr::new("HTML Format")
@@ -58,7 +59,13 @@ impl Clipboard {
             let cf_html = RegisterClipboardFormatW(html_wide.as_ptr());
             let clipboard_data = if formats.contains(&cf_html) {
                 let data = GetClipboardData(cf_html);
+                if data.is_null() {
+                    bail!(io::Error::last_os_error());
+                }
                 let data = GlobalLock(data);
+                if data.is_null() {
+                    bail!(io::Error::last_os_error());
+                }
                 let data_str = std::ffi::CString::from_raw(data as *mut i8).into_string()?;
                 let c = HTML_RE.captures(&data_str).ok_or(format_err!(
                     "An error occured while using regex on the HTML clipboard data"
@@ -76,14 +83,20 @@ impl Clipboard {
                 Ok(ClipboardData::new((fragment, None, source_url)))
             } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
                 let data = GetClipboardData(CF_UNICODETEXT);
+                if data.is_null() {
+                    bail!(io::Error::last_os_error());
+                }
                 let data = GlobalLock(data);
+                if data.is_null() {
+                    bail!(io::Error::last_os_error());
+                }
                 let len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
                 let v = Vec::from_raw_parts(data as *mut u16, len, len);
                 GlobalUnlock(data);
                 let data = String::from_utf16(&v)?;
                 Ok(ClipboardData::new((data, None)))
             } else {
-                Err(format_err!("Non-text format not available"))
+                bail!("Non-text format not available")
             };
             CloseClipboard();
             clipboard_data
@@ -138,7 +151,7 @@ impl Window {
             };
 
             if RegisterClassW(&wc) == 0 {
-                return Err(format_err!("Failed to register class"));
+                bail!(io::Error::last_os_error());
             }
 
             let hwnd = CreateWindowExW(
@@ -157,7 +170,7 @@ impl Window {
             );
 
             if hwnd.is_null() {
-                return Err(format_err!("An error occurred while creating the window"));
+                bail!(io::Error::last_os_error());
             }
 
             Ok(hwnd)
@@ -188,13 +201,28 @@ impl ClipboardFunctions for Window {
                 pt: POINT { x: 0, y: 0 },
             };
 
-            if AddClipboardFormatListener(self.0) != 0 {
-                while GetMessageW(&mut msg as *mut MSG, self.0, 0, 0) != 0 {
-                    TranslateMessage(&msg as *const MSG);
-                    DispatchMessageW(&msg as *const MSG);
-                }
-                RemoveClipboardFormatListener(self.0);
+            if AddClipboardFormatListener(self.0) == 0 {
+                panic!(
+                    "Could not add clipboard format listener {}",
+                    io::Error::last_os_error()
+                );
             }
+
+            loop {
+                let ret = GetMessageW(&mut msg as *mut MSG, self.0, 0, 0);
+
+                if ret == 0 {
+                    break;
+                } else if ret == -1 {
+                    eprint!(
+                        "An error occured while retrieving message {}",
+                        io::Error::last_os_error()
+                    );
+                }
+                TranslateMessage(&msg as *const MSG);
+                DispatchMessageW(&msg as *const MSG);
+            }
+            RemoveClipboardFormatListener(self.0);
         }
     }
 }
