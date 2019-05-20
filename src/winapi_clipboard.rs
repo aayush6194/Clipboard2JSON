@@ -14,6 +14,7 @@ use winapi::shared::minwindef::{LPARAM, LRESULT, WPARAM};
 use winapi::shared::windef::{HWND, POINT};
 use winapi::um::libloaderapi::GetModuleHandleW;
 use winapi::um::winbase::{GlobalLock, GlobalSize, GlobalUnlock};
+use winapi::um::winuser::DestroyWindow;
 use winapi::um::winuser::{
     AddClipboardFormatListener, CloseClipboard, CreateWindowExW, DefWindowProcW, DispatchMessageW,
     EnumClipboardFormats, GetClipboardData, GetMessageW, IsClipboardFormatAvailable, OpenClipboard,
@@ -28,7 +29,7 @@ pub struct Clipboard {
 
 impl Clipboard {
     // TODO: add feature of fetching owner name!
-    pub fn get_formats() -> HashSet<u32> {
+    fn get_formats() -> HashSet<u32> {
         let mut formats = HashSet::new();
         unsafe {
             if OpenClipboard(null_mut()) != 0 {
@@ -45,7 +46,7 @@ impl Clipboard {
         formats
     }
 
-    fn get_clipboard(&self) -> Result<ClipboardData, Error> {
+    fn get_clipboard() -> Result<ClipboardData, Error> {
         let formats = Clipboard::get_formats();
         unsafe {
             if OpenClipboard(null_mut()) == 0 {
@@ -113,7 +114,7 @@ unsafe extern "system" fn wnd_proc(
 ) -> LRESULT {
     match msg {
         WM_CLIPBOARDUPDATE => {
-            let data = CLIPBOARD.lock().unwrap().get_clipboard();
+            let data = Clipboard::get_clipboard();
             if data.is_ok() {
                 CLIPBOARD.lock().unwrap().callback.as_ref().unwrap().0(data.unwrap()).unwrap();
             };
@@ -127,66 +128,63 @@ unsafe extern "system" fn wnd_proc(
     }
 }
 
-pub struct Window(HWND);
+fn create_window() -> Result<HWND, Error> {
+    let class_name: Vec<u16> = OsStr::new("Clipoard Rust")
+        .encode_wide()
+        .chain(once(0))
+        .collect();
 
-impl Window {
-    fn create_window() -> Result<HWND, Error> {
-        let class_name: Vec<u16> = OsStr::new("Clipoard Rust")
-            .encode_wide()
-            .chain(once(0))
-            .collect();
+    unsafe {
+        let wc = WNDCLASSW {
+            style: CS_OWNDC,
+            lpfnWndProc: Some(wnd_proc),
+            hInstance: GetModuleHandleW(null_mut()),
+            lpszClassName: class_name.as_ptr(),
+            cbClsExtra: 0,
+            cbWndExtra: 0,
+            hIcon: null_mut(),
+            hCursor: null_mut(),
+            hbrBackground: null_mut(),
+            lpszMenuName: null_mut(),
+        };
 
-        unsafe {
-            let wc = WNDCLASSW {
-                style: CS_OWNDC,
-                lpfnWndProc: Some(wnd_proc),
-                hInstance: GetModuleHandleW(null_mut()),
-                lpszClassName: class_name.as_ptr(),
-                cbClsExtra: 0,
-                cbWndExtra: 0,
-                hIcon: null_mut(),
-                hCursor: null_mut(),
-                hbrBackground: null_mut(),
-                lpszMenuName: null_mut(),
-            };
-
-            if RegisterClassW(&wc) == 0 {
-                bail!(io::Error::last_os_error());
-            }
-
-            let hwnd = CreateWindowExW(
-                0,
-                class_name.as_ptr(),
-                class_name.as_ptr(),
-                WS_MINIMIZE,
-                CW_USEDEFAULT,
-                CW_USEDEFAULT,
-                CW_USEDEFAULT,
-                CW_USEDEFAULT,
-                HWND_MESSAGE,
-                null_mut(),
-                GetModuleHandleW(null_mut()),
-                null_mut(),
-            );
-
-            if hwnd.is_null() {
-                bail!(io::Error::last_os_error());
-            }
-
-            Ok(hwnd)
+        if RegisterClassW(&wc) == 0 {
+            bail!(io::Error::last_os_error());
         }
+
+        let hwnd = CreateWindowExW(
+            0,
+            class_name.as_ptr(),
+            class_name.as_ptr(),
+            WS_MINIMIZE,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            HWND_MESSAGE,
+            null_mut(),
+            GetModuleHandleW(null_mut()),
+            null_mut(),
+        );
+
+        if hwnd.is_null() {
+            bail!(io::Error::last_os_error());
+        }
+
+        Ok(hwnd)
     }
 }
 
-impl ClipboardFunctions for Window {
+pub struct ClipboardOwner(HWND);
+
+impl ClipboardFunctions for ClipboardOwner {
     fn new() -> Result<Self, Error> {
-        let hwnd = Window::create_window()?;
-        Ok(Window(hwnd))
+        let hwnd = create_window()?;
+        Ok(ClipboardOwner(hwnd))
     }
 
     fn get_clipboard(&self) -> Result<ClipboardData, Error> {
-        let data = CLIPBOARD.lock().unwrap().get_clipboard()?;
-        Ok(data)
+        Clipboard::get_clipboard()
     }
 
     fn watch_clipboard(&self, callback: &ClipboardSink) {
@@ -223,6 +221,14 @@ impl ClipboardFunctions for Window {
                 DispatchMessageW(&msg as *const MSG);
             }
             RemoveClipboardFormatListener(self.0);
+        }
+    }
+}
+
+impl Drop for ClipboardOwner {
+    fn drop(&mut self) {
+        unsafe {
+            DestroyWindow(self.0);
         }
     }
 }
