@@ -2,7 +2,7 @@ use crate::common::{ClipboardData, ClipboardFunctions, ClipboardSink, ClipboardT
 use failure::{bail, format_err, Error};
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::io;
 use std::iter::once;
@@ -20,9 +20,12 @@ use winapi::um::winuser::{
     AddClipboardFormatListener, CloseClipboard, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, EnumClipboardFormats, GetClipboardData, GetForegroundWindow, GetMessageW,
     GetWindowTextW, IsClipboardFormatAvailable, OpenClipboard, PostQuitMessage, RegisterClassW,
-    RegisterClipboardFormatW, RemoveClipboardFormatListener, TranslateMessage, CF_UNICODETEXT,
-    CS_OWNDC, CW_USEDEFAULT, HWND_MESSAGE, MSG, WM_CLIPBOARDUPDATE, WM_DESTROY, WNDCLASSW,
-    WS_MINIMIZE,
+    RegisterClipboardFormatW, RemoveClipboardFormatListener, TranslateMessage, CF_BITMAP, CF_DIB,
+    CF_DIBV5, CF_DIF, CF_DSPBITMAP, CF_DSPENHMETAFILE, CF_DSPMETAFILEPICT, CF_DSPTEXT,
+    CF_ENHMETAFILE, CF_GDIOBJFIRST, CF_GDIOBJLAST, CF_HDROP, CF_LOCALE, CF_METAFILEPICT,
+    CF_OEMTEXT, CF_OWNERDISPLAY, CF_PALETTE, CF_PENDATA, CF_PRIVATEFIRST, CF_PRIVATELAST, CF_RIFF,
+    CF_SYLK, CF_TEXT, CF_TIFF, CF_UNICODETEXT, CF_WAVE, CS_OWNDC, CW_USEDEFAULT, HWND_MESSAGE, MSG,
+    WM_CLIPBOARDUPDATE, WM_DESTROY, WNDCLASSW, WS_MINIMIZE, GetClipboardFormatNameW
 };
 
 pub struct Clipboard {
@@ -208,12 +211,47 @@ impl ClipboardFunctions for ClipboardOwner {
             if OpenClipboard(null_mut()) == 0 {
                 bail!(io::Error::last_os_error());
             }
-        }
-        let formats = Clipboard::get_formats()?;
-        unsafe {
+            let formats = Clipboard::get_formats()?;
             CloseClipboard();
+            let formats = formats.iter().fold(HashMap::new(), |mut map, format| {
+                let name = match *format {
+                    CF_BITMAP => "CF_BITMAP".to_string(),
+                    CF_DIB => "CF_DIB".to_string(),
+                    CF_DIBV5 => "CF_DIBV5".to_string(),
+                    CF_DIF => "CF_DIF".to_string(),
+                    CF_DSPBITMAP => "CF_DSPBITMAP".to_string(),
+                    CF_DSPENHMETAFILE => "CF_DSPENHMETAFILE".to_string(),
+                    CF_DSPMETAFILEPICT => "CF_DSPMETAFILEPICT".to_string(),
+                    CF_DSPTEXT => "CF_DSPTEXT".to_string(),
+                    CF_ENHMETAFILE => "CF_ENHMETAFILE".to_string(),
+                    CF_GDIOBJFIRST => "CF_GDIOBJFIRST".to_string(),
+                    CF_GDIOBJLAST => "CF_GDIOBJLAST".to_string(),
+                    CF_HDROP => "CF_HDROP".to_string(),
+                    CF_LOCALE => "CF_LOCALE".to_string(),
+                    CF_METAFILEPICT => "CF_METAFILEPICT".to_string(),
+                    CF_OEMTEXT => "CF_OEMTEXT".to_string(),
+                    CF_OWNERDISPLAY => "CF_OWNERDISPLAY".to_string(),
+                    CF_PALETTE => "CF_PALETTE".to_string(),
+                    CF_PENDATA => "CF_PENDATA".to_string(),
+                    CF_PRIVATEFIRST => "CF_PRIVATEFIRST".to_string(),
+                    CF_PRIVATELAST => "CF_PRIVATELAST".to_string(),
+                    CF_RIFF => "CF_RIFF".to_string(),
+                    CF_SYLK => "CF_SYLK".to_string(),
+                    CF_TEXT => "CF_TEXT".to_string(),
+                    CF_TIFF => "CF_TIFF".to_string(),
+                    CF_UNICODETEXT => "CF_UNICODETEXT".to_string(),
+                    CF_WAVE => "CF_WAVE".to_string(),
+                    format => {
+                        let mut v: [u16; 255] = mem::uninitialized();
+                        let len = GetClipboardFormatNameW(format, v.as_mut_ptr(), 255) as usize;
+                        String::from_utf16_lossy(&v[0..len])
+                    }
+                };
+                map.insert(name, *format);
+                map
+            });
+            Ok(ClipboardTargets::WINAPI(formats))
         }
-        Ok(ClipboardTargets::WINAPI(formats))
     }
 
     fn get_clipboard(&self) -> Result<ClipboardData, Error> {

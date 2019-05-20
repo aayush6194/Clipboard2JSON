@@ -25,7 +25,7 @@ pub struct ClipboardSink(pub fn(ClipboardData) -> Result<(), Error>);
 
 #[derive(Debug)]
 pub enum ClipboardTargets {
-    WINAPI(HashSet<u32>),
+    WINAPI(HashMap<String, u32>),
     X11(HashMap<String, u64>),
 }
 
