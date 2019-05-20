@@ -15,7 +15,7 @@ use x11::xlib::{
 /// Represents a windowless X11 Client and its connection to the X11 Server.
 ///
 /// Please note that it does not currently handle large buffers.
-pub struct Clipboard {
+pub struct ClipboardOwner {
     /// Connection to the X11 Server
     display: *mut Display,
     /// Unmapped subwindow which is used for listening to events
@@ -32,7 +32,7 @@ extern "C" {
     fn XFixesQueryExtension(_3: *mut Display, _2: *mut c_int, _1: *mut c_int) -> c_int;
 }
 
-impl Clipboard {
+impl ClipboardOwner {
     /// Gets a hashmap of content type targets along with their atom identifier
     /// that the clipboard owner can convert the data to. The current implementation
     /// only handles HTML and text based formats i.e. text/html, UTF8_STRING, TEXT
@@ -217,7 +217,7 @@ impl Clipboard {
     }
 }
 
-impl ClipboardFunctions for Clipboard {
+impl ClipboardFunctions for ClipboardOwner {
     /// Creates a new instance of the clipboard.
     ///
     /// Connects to the XServer and creates a unmapped window for requesting data
@@ -246,7 +246,7 @@ impl ClipboardFunctions for Clipboard {
         let prop_id =
             unsafe { XInternAtom(display, CString::new("XSEL_DATA").unwrap().as_ptr(), False) };
 
-        Ok(Clipboard {
+        Ok(ClipboardOwner {
             display,
             window,
             prop_id,
@@ -338,7 +338,7 @@ impl ClipboardFunctions for Clipboard {
     }
 }
 
-impl Drop for Clipboard {
+impl Drop for ClipboardOwner {
     /// Call the drop function to destroy the window and close the connection to the XServer.
     fn drop(&mut self) {
         unsafe {

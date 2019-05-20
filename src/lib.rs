@@ -5,14 +5,14 @@ pub use common::{ClipboardData, ClipboardFunctions, ClipboardSink};
 #[path = ""]
 pub mod clipboard {
     pub mod x11_clipboard;
-    pub type Clipboard = x11_clipboard::Clipboard;
+    pub type Clipboard = x11_clipboard::ClipboardOwner;
 }
 
 #[cfg(windows)]
 #[path = ""]
 pub mod clipboard {
     pub mod winapi_clipboard;
-    pub type Clipboard = winapi_clipboard::Window;
+    pub type Clipboard = winapi_clipboard::ClipboardOwner;
 }
 
 pub use clipboard::Clipboard;
