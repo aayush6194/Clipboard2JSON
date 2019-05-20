@@ -29,11 +29,23 @@ use winapi::um::winuser::{
     WS_MINIMIZE,
 };
 
+/// Gets a hashset of all the data formats available on the clipboard.
+///
+/// If the format is a standard clipboard format then its name and description
+/// can be found at [MDN](https://docs.microsoft.com/en-us/windows/desktop/dataxchg/standard-clipboard-formats).
+/// If the format is a registered format, `GetClipboardFormatNameW` can be used
+/// to get its name.  
+/// The clipboard must be *opened* by calling the `OpenClipboard` function before
+/// calling this function.  
+/// More information about the underlying WinAPI function can be found at [MDN]
+/// (https://docs.microsoft.com/en-us/windows/desktop/api/winuser/nf-winuser-enumclipboardformats)
 fn get_formats() -> Result<HashSet<u32>, Error> {
     let mut formats = HashSet::new();
     unsafe {
         let mut format = EnumClipboardFormats(0);
         loop {
+            // format is 0 if all the formats were successfully read
+            // or if it is an error
             if format == 0 {
                 match io::Error::last_os_error().raw_os_error() {
                     Some(e) => {
