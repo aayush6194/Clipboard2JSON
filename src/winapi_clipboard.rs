@@ -1,4 +1,4 @@
-use crate::common::{ClipboardData, ClipboardFunctions, ClipboardSink};
+use crate::common::{ClipboardData, ClipboardFunctions, ClipboardSink, ClipboardTargets};
 use failure::{bail, format_err, Error};
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -201,6 +201,19 @@ impl ClipboardFunctions for ClipboardOwner {
     fn new() -> Result<Self, Error> {
         let hwnd = create_window()?;
         Ok(ClipboardOwner(hwnd))
+    }
+
+    fn get_targets(&self) -> Result<ClipboardTargets, Error> {
+        unsafe {
+            if OpenClipboard(null_mut()) == 0 {
+                bail!(io::Error::last_os_error());
+            }
+        }
+        let formats = Clipboard::get_formats()?;
+        unsafe {
+            CloseClipboard();
+        }
+        Ok(ClipboardTargets::WINAPI(formats))
     }
 
     fn get_clipboard(&self) -> Result<ClipboardData, Error> {

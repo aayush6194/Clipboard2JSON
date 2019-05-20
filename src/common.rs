@@ -1,5 +1,6 @@
 use failure::Error;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Defines common traits for the clipboard so that it's easier to abstract over
@@ -7,8 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 // @TODO: Add more functions when workng on WINAPI
 pub trait ClipboardFunctions: Sized {
     /// Creates a new `Clipboard` with a pointer to the hidden window
-    // @TODO: Better error handling?
     fn new() -> Result<Self, Error>;
+    fn get_targets(&self) -> Result<ClipboardTargets, Error>;
     /// Fetches the data stored in the clipboard as a text-based format
     fn get_clipboard(&self) -> Result<ClipboardData, Error>;
     /// Watches over the clipboard and passes the changed data to the callback
@@ -21,6 +22,12 @@ pub trait ClipboardFunctions: Sized {
 /// clipboard.
 #[derive(Clone)]
 pub struct ClipboardSink(pub fn(ClipboardData) -> Result<(), Error>);
+
+#[derive(Debug)]
+pub enum ClipboardTargets {
+    WINAPI(HashSet<u32>),
+    X11(HashMap<String, u64>),
+}
 
 /// Represents the textual data stored in clipboard as either HTML or UTF8.  
 ///
