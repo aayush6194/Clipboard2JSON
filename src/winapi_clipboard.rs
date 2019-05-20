@@ -39,10 +39,6 @@ pub struct Clipboard {
 }
 
 impl Clipboard {
-    pub fn new() -> Self {
-        Clipboard { callback: None }
-    }
-
     pub fn get_formats() -> HashSet<u32> {
         let mut formats = HashSet::new();
         unsafe {
@@ -60,7 +56,7 @@ impl Clipboard {
         formats
     }
 
-    pub fn get_clipboard(&mut self) -> Result<ClipboardData, Error> {
+    fn get_clipboard(&mut self) -> Result<ClipboardData, Error> {
         let formats = Clipboard::get_formats();
         unsafe {
             if OpenClipboard(null_mut()) == 0 {
