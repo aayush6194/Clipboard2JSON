@@ -100,8 +100,10 @@ unsafe extern "system" fn wnd_proc(
 ) -> LRESULT {
     match msg {
         WM_CLIPBOARDUPDATE => {
-            let data = CLIPBOARD.lock().unwrap().get_clipboard().unwrap();
-            CLIPBOARD.lock().unwrap().callback.as_ref().unwrap().0(data).unwrap();
+            let data = CLIPBOARD.lock().unwrap().get_clipboard();
+            if data.is_ok() {
+                CLIPBOARD.lock().unwrap().callback.as_ref().unwrap().0(data.unwrap()).unwrap();
+            };
             1
         }
         WM_DESTROY => {
