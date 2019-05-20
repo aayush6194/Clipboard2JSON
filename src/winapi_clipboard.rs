@@ -26,7 +26,10 @@ use winapi::um::winuser::{
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type", content = "data")]
 pub enum ClipboardData {
-    Html(String, String),
+    Html {
+        url: Option<String>,
+        content: String,
+    },
     #[serde(rename = "text")]
     UnicodeText(String),
 }
@@ -73,14 +76,23 @@ impl Clipboard {
                 let data = GetClipboardData(cf_html);
                 let data = GlobalLock(data);
                 let data_str = std::ffi::CString::from_raw(data as *mut i8).into_string()?;
-                let c = RE.captures(&data_str).expect("chose wrong regex");
+                let c = HTML_RE.captures(&data_str).ok_or(format_err!(
+                    "An error occured while using regex on the HTML clipboard data"
+                ))?;
                 let fragment = data_str
-                    .get(c[4].parse::<usize>()?..c[5].parse::<usize>()?)
-                    .expect("chose wrong regex..fix coming soon")
+                    .get(c[1].parse::<usize>()?..c[2].parse::<usize>()?)
+                    .ok_or(format_err!(
+                        "An error occured while trying to get the start and end fragments"
+                    ))?
                     .to_string();
-                let source_url = (&c[6]).to_string();
+                let source_url = c
+                    .name("url")
+                    .map_or(None, |url| Some(url.as_str().to_string()));
                 GlobalUnlock(data);
-                Ok(ClipboardData::Html(source_url, fragment))
+                Ok(ClipboardData::Html {
+                    url: source_url,
+                    content: fragment,
+                })
             } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
                 let data = GetClipboardData(CF_UNICODETEXT);
                 let data = GlobalLock(data);
@@ -205,29 +217,12 @@ impl ClipboardFunctions for Window {
 
 lazy_static! {
     static ref CLIPBOARD: Mutex<Clipboard> = Mutex::new(Clipboard { callback: None });
-    static ref RE: Regex = Regex::new(
+    static ref HTML_RE: Regex = Regex::new(
         r#"(?x)
-        Version:(\d+.\d+)\r\n
-        StartHTML:(\d+)\r\n
-        EndHTML:(\d+)\r\n
-        StartFragment:(\d+)\r\n
-        EndFragment:(\d+)\r\n
-        SourceURL:(\S+)\r\n
+        StartFragment:(?P<start>\d+)\s+
+        EndFragment:(?P<end>\d+)(?s:.*)
+        (SourceURL:(?P<url>\S+))?
         "#
     )
     .unwrap();
-    // @TODO: Implement regex for the other version
-    // static ref RE_EX: Regex = Regex::new(
-    //     r#"(?x)
-    //     Version:(\d+.\d+)\r\n
-    //     StartHTML:(\d+)\r\n
-    //     EndHTML:(\d+)\r\n
-    //     StartFragment:(\d+)\r\n
-    //     EndFragment:(\d+)\r\n
-    //     StartSelection:(\d+)\r\n
-    //     EndSelection:(\d+)\r\n
-    //     SourceURL:(\S+)\r\n
-    //     "#
-    // )
-    // .unwrap();
 }
