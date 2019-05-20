@@ -2,13 +2,17 @@ mod common;
 pub use common::{ClipboardData, ClipboardFunctions, ClipboardSink};
 
 #[cfg(target_os = "linux")]
-pub mod x11_clipboard;
+#[path = ""]
+pub mod clipboard {
+    pub mod x11_clipboard;
+    pub type Clipboard = x11_clipboard::Clipboard;
+}
 
-#[cfg(target_os = "windows")]
-pub mod winapi_clipboard;
+#[cfg(windows)]
+#[path = ""]
+pub mod clipboard {
+    pub mod winapi_clipboard;
+    pub type Clipboard = winapi_clipboard::Window;
+}
 
-#[cfg(target_os = "linux")]
-pub type Clipboard = x11_clipboard::Clipboard;
-
-#[cfg(target_os = "windows")]
-pub type Clipboard = winapi_clipboard::Window;
+pub use clipboard::Clipboard;
