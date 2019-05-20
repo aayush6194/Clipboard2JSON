@@ -26,6 +26,7 @@ pub struct Clipboard {
 }
 
 impl Clipboard {
+    // TODO: add feature of fetching owner name!
     pub fn get_formats() -> HashSet<u32> {
         let mut formats = HashSet::new();
         unsafe {
