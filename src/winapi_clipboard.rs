@@ -13,6 +13,7 @@ use std::sync::Mutex;
 use winapi::ctypes::wchar_t;
 use winapi::shared::minwindef::{LPARAM, LRESULT, WPARAM};
 use winapi::shared::windef::{HWND, POINT};
+use winapi::shared::winerror::ERROR_SUCCESS;
 use winapi::um::libloaderapi::GetModuleHandleW;
 use winapi::um::winbase::{GlobalLock, GlobalSize, GlobalUnlock};
 use winapi::um::winuser::{
@@ -29,29 +30,36 @@ pub struct Clipboard {
 }
 
 impl Clipboard {
-    fn get_formats() -> HashSet<u32> {
+    fn get_formats() -> Result<HashSet<u32>, Error> {
         let mut formats = HashSet::new();
         unsafe {
-            if OpenClipboard(null_mut()) != 0 {
-                let mut format = EnumClipboardFormats(0);
-                loop {
-                    if format == 0 {
-                        break;
+            let mut format = EnumClipboardFormats(0);
+            loop {
+                if format == 0 {
+                    match io::Error::last_os_error().raw_os_error() {
+                        Some(e) => {
+                            if e != ERROR_SUCCESS as i32 {
+                                bail!(io::Error::last_os_error())
+                            }
+                        }
+                        None => bail!("Unknown error"),
                     }
-                    formats.insert(format);
-                    format = EnumClipboardFormats(format);
+                    break;
                 }
+                formats.insert(format);
+                format = EnumClipboardFormats(format);
             }
         }
-        formats
+        Ok(formats)
     }
 
     fn get_clipboard() -> Result<ClipboardData, Error> {
-        let formats = Clipboard::get_formats();
         unsafe {
             if OpenClipboard(null_mut()) == 0 {
                 bail!(io::Error::last_os_error());
             }
+            let formats = Clipboard::get_formats()?;
+
             // check for CF_CLIPBOARD
             let html_wide: Vec<u16> = OsStr::new("HTML Format")
                 .encode_wide()
@@ -126,7 +134,10 @@ unsafe extern "system" fn wnd_proc(
             let data = Clipboard::get_clipboard();
             if data.is_ok() {
                 CLIPBOARD.lock().unwrap().callback.as_ref().unwrap().0(data.unwrap()).unwrap();
-            };
+            } else {
+                let err_msg = data.unwrap_err();
+                println!("An error occured: {}", err_msg);
+            }
             1
         }
         WM_DESTROY => {
