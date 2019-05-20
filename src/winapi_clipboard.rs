@@ -159,7 +159,7 @@ unsafe extern "system" fn wnd_proc(
                 CLIPBOARD.lock().unwrap().as_ref().unwrap().0(data.unwrap()).unwrap();
             } else {
                 let err_msg = data.unwrap_err();
-                println!("An error occured: {}", err_msg);
+                eprintln!("An error occured: {}", err_msg);
             }
             1
         }
