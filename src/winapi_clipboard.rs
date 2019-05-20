@@ -18,110 +18,105 @@ use winapi::um::libloaderapi::GetModuleHandleW;
 use winapi::um::winbase::{GlobalLock, GlobalSize, GlobalUnlock};
 use winapi::um::winuser::{
     AddClipboardFormatListener, CloseClipboard, CreateWindowExW, DefWindowProcW, DestroyWindow,
-    DispatchMessageW, EnumClipboardFormats, GetClipboardData, GetForegroundWindow, GetMessageW,
-    GetWindowTextW, IsClipboardFormatAvailable, OpenClipboard, PostQuitMessage, RegisterClassW,
-    RegisterClipboardFormatW, RemoveClipboardFormatListener, TranslateMessage, CF_BITMAP, CF_DIB,
-    CF_DIBV5, CF_DIF, CF_DSPBITMAP, CF_DSPENHMETAFILE, CF_DSPMETAFILEPICT, CF_DSPTEXT,
-    CF_ENHMETAFILE, CF_GDIOBJFIRST, CF_GDIOBJLAST, CF_HDROP, CF_LOCALE, CF_METAFILEPICT,
-    CF_OEMTEXT, CF_OWNERDISPLAY, CF_PALETTE, CF_PENDATA, CF_PRIVATEFIRST, CF_PRIVATELAST, CF_RIFF,
-    CF_SYLK, CF_TEXT, CF_TIFF, CF_UNICODETEXT, CF_WAVE, CS_OWNDC, CW_USEDEFAULT, HWND_MESSAGE, MSG,
-    WM_CLIPBOARDUPDATE, WM_DESTROY, WNDCLASSW, WS_MINIMIZE, GetClipboardFormatNameW
+    DispatchMessageW, EnumClipboardFormats, GetClipboardData, GetClipboardFormatNameW,
+    GetForegroundWindow, GetMessageW, GetWindowTextW, IsClipboardFormatAvailable, OpenClipboard,
+    PostQuitMessage, RegisterClassW, RegisterClipboardFormatW, RemoveClipboardFormatListener,
+    TranslateMessage, CF_BITMAP, CF_DIB, CF_DIBV5, CF_DIF, CF_DSPBITMAP, CF_DSPENHMETAFILE,
+    CF_DSPMETAFILEPICT, CF_DSPTEXT, CF_ENHMETAFILE, CF_GDIOBJFIRST, CF_GDIOBJLAST, CF_HDROP,
+    CF_LOCALE, CF_METAFILEPICT, CF_OEMTEXT, CF_OWNERDISPLAY, CF_PALETTE, CF_PENDATA,
+    CF_PRIVATEFIRST, CF_PRIVATELAST, CF_RIFF, CF_SYLK, CF_TEXT, CF_TIFF, CF_UNICODETEXT, CF_WAVE,
+    CS_OWNDC, CW_USEDEFAULT, HWND_MESSAGE, MSG, WM_CLIPBOARDUPDATE, WM_DESTROY, WNDCLASSW,
+    WS_MINIMIZE,
 };
 
-pub struct Clipboard {
-    callback: Option<ClipboardSink>,
+fn get_formats() -> Result<HashSet<u32>, Error> {
+    let mut formats = HashSet::new();
+    unsafe {
+        let mut format = EnumClipboardFormats(0);
+        loop {
+            if format == 0 {
+                match io::Error::last_os_error().raw_os_error() {
+                    Some(e) => {
+                        if e != ERROR_SUCCESS as i32 {
+                            bail!(io::Error::last_os_error())
+                        }
+                    }
+                    None => bail!("Unknown error"),
+                }
+                break;
+            }
+            formats.insert(format);
+            format = EnumClipboardFormats(format);
+        }
+    }
+    Ok(formats)
 }
 
-impl Clipboard {
-    fn get_formats() -> Result<HashSet<u32>, Error> {
-        let mut formats = HashSet::new();
-        unsafe {
-            let mut format = EnumClipboardFormats(0);
-            loop {
-                if format == 0 {
-                    match io::Error::last_os_error().raw_os_error() {
-                        Some(e) => {
-                            if e != ERROR_SUCCESS as i32 {
-                                bail!(io::Error::last_os_error())
-                            }
-                        }
-                        None => bail!("Unknown error"),
-                    }
-                    break;
-                }
-                formats.insert(format);
-                format = EnumClipboardFormats(format);
-            }
+fn get_clipboard() -> Result<ClipboardData, Error> {
+    unsafe {
+        if OpenClipboard(null_mut()) == 0 {
+            bail!(io::Error::last_os_error());
         }
-        Ok(formats)
-    }
+        let formats = get_formats()?;
 
-    fn get_clipboard() -> Result<ClipboardData, Error> {
-        unsafe {
-            if OpenClipboard(null_mut()) == 0 {
+        // check for CF_CLIPBOARD
+        let html_wide: Vec<u16> = OsStr::new("HTML Format")
+            .encode_wide()
+            .chain(once(0))
+            .collect();
+        let cf_html = RegisterClipboardFormatW(html_wide.as_ptr());
+        let owner = GetForegroundWindow();
+        let owner = if owner.is_null() {
+            None
+        } else {
+            let mut raw_data: [u16; 255] = mem::uninitialized();
+            let data_len = GetWindowTextW(owner, raw_data.as_mut_ptr(), 255) as usize;
+            let owner_title = String::from_utf16_lossy(&raw_data[0..data_len]);
+            Some(owner_title)
+        };
+        let clipboard_data = if formats.contains(&cf_html) {
+            let data = GetClipboardData(cf_html);
+            if data.is_null() {
                 bail!(io::Error::last_os_error());
             }
-            let formats = Clipboard::get_formats()?;
-
-            // check for CF_CLIPBOARD
-            let html_wide: Vec<u16> = OsStr::new("HTML Format")
-                .encode_wide()
-                .chain(once(0))
-                .collect();
-            let cf_html = RegisterClipboardFormatW(html_wide.as_ptr());
-            let owner = GetForegroundWindow();
-            let owner = if owner.is_null() {
-                None
-            } else {
-                let mut raw_data: [u16; 255] = mem::uninitialized();
-                let data_len = GetWindowTextW(owner, raw_data.as_mut_ptr(), 255) as usize;
-                let owner_title = String::from_utf16_lossy(&raw_data[0..data_len]);
-                Some(owner_title)
-            };
-            let clipboard_data = if formats.contains(&cf_html) {
-                let data = GetClipboardData(cf_html);
-                if data.is_null() {
-                    bail!(io::Error::last_os_error());
-                }
-                let data = GlobalLock(data);
-                if data.is_null() {
-                    bail!(io::Error::last_os_error());
-                }
-                let data_str = std::ffi::CString::from_raw(data as *mut i8).into_string()?;
-                let captures = HTML_RE.captures(&data_str).ok_or(format_err!(
-                    "An error occured while using regex on the HTML clipboard data"
-                ))?;
-                let fragment = data_str
-                    .get(captures[1].parse::<usize>()?..captures[2].parse::<usize>()?)
-                    .ok_or(format_err!(
-                        "An error occured while trying to get the start and end fragments"
-                    ))?
-                    .to_string();
-                let source_url = captures
-                    .name("url")
-                    .map_or(None, |url| Some(url.as_str().to_string()));
-                GlobalUnlock(data);
-                Ok(ClipboardData::new((fragment, owner, source_url)))
-            } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
-                let data = GetClipboardData(CF_UNICODETEXT);
-                if data.is_null() {
-                    bail!(io::Error::last_os_error());
-                }
-                let data = GlobalLock(data);
-                if data.is_null() {
-                    bail!(io::Error::last_os_error());
-                }
-                let data_len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
-                let raw_data = Vec::from_raw_parts(data as *mut u16, data_len, data_len);
-                GlobalUnlock(data);
-                let data = String::from_utf16(&raw_data)?;
-                Ok(ClipboardData::new((data, owner)))
-            } else {
-                bail!("Non-text format not available")
-            };
-            CloseClipboard();
-            clipboard_data
-        }
+            let data = GlobalLock(data);
+            if data.is_null() {
+                bail!(io::Error::last_os_error());
+            }
+            let data_str = std::ffi::CString::from_raw(data as *mut i8).into_string()?;
+            let captures = HTML_RE.captures(&data_str).ok_or(format_err!(
+                "An error occured while using regex on the HTML clipboard data"
+            ))?;
+            let fragment = data_str
+                .get(captures[1].parse::<usize>()?..captures[2].parse::<usize>()?)
+                .ok_or(format_err!(
+                    "An error occured while trying to get the start and end fragments"
+                ))?
+                .to_string();
+            let source_url = captures
+                .name("url")
+                .map_or(None, |url| Some(url.as_str().to_string()));
+            GlobalUnlock(data);
+            Ok(ClipboardData::new((fragment, owner, source_url)))
+        } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
+            let data = GetClipboardData(CF_UNICODETEXT);
+            if data.is_null() {
+                bail!(io::Error::last_os_error());
+            }
+            let data = GlobalLock(data);
+            if data.is_null() {
+                bail!(io::Error::last_os_error());
+            }
+            let data_len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
+            let raw_data = Vec::from_raw_parts(data as *mut u16, data_len, data_len);
+            GlobalUnlock(data);
+            let data = String::from_utf16(&raw_data)?;
+            Ok(ClipboardData::new((data, owner)))
+        } else {
+            bail!("Non-text format not available")
+        };
+        CloseClipboard();
+        clipboard_data
     }
 }
 
@@ -134,9 +129,9 @@ unsafe extern "system" fn wnd_proc(
 ) -> LRESULT {
     match msg {
         WM_CLIPBOARDUPDATE => {
-            let data = Clipboard::get_clipboard();
+            let data = get_clipboard();
             if data.is_ok() {
-                CLIPBOARD.lock().unwrap().callback.as_ref().unwrap().0(data.unwrap()).unwrap();
+                CLIPBOARD.lock().unwrap().as_ref().unwrap().0(data.unwrap()).unwrap();
             } else {
                 let err_msg = data.unwrap_err();
                 println!("An error occured: {}", err_msg);
@@ -211,7 +206,7 @@ impl ClipboardFunctions for ClipboardOwner {
             if OpenClipboard(null_mut()) == 0 {
                 bail!(io::Error::last_os_error());
             }
-            let formats = Clipboard::get_formats()?;
+            let formats = get_formats()?;
             CloseClipboard();
             let formats = formats.iter().fold(HashMap::new(), |mut map, format| {
                 let name = match *format {
@@ -255,12 +250,12 @@ impl ClipboardFunctions for ClipboardOwner {
     }
 
     fn get_clipboard(&self) -> Result<ClipboardData, Error> {
-        Clipboard::get_clipboard()
+        get_clipboard()
     }
 
     fn watch_clipboard(&self, callback: &ClipboardSink) {
         unsafe {
-            CLIPBOARD.lock().unwrap().callback = Some(callback.clone());
+            *CLIPBOARD.lock().unwrap() = Some(callback.clone());
             let mut msg = MSG {
                 hwnd: self.0,
                 message: 0,
@@ -305,7 +300,7 @@ impl Drop for ClipboardOwner {
 }
 
 lazy_static! {
-    static ref CLIPBOARD: Mutex<Clipboard> = Mutex::new(Clipboard { callback: None });
+    static ref CLIPBOARD: Mutex<Option<ClipboardSink>> = Mutex::new(None);
     static ref HTML_RE: Regex = Regex::new(
         r#"(?x)
         StartFragment:(?P<start>\d+)\s+
