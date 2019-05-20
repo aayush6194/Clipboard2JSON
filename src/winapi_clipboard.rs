@@ -6,6 +6,7 @@ use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::io;
 use std::iter::once;
+use std::mem;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr::null_mut;
 use std::sync::Mutex;
@@ -14,13 +15,13 @@ use winapi::shared::minwindef::{LPARAM, LRESULT, WPARAM};
 use winapi::shared::windef::{HWND, POINT};
 use winapi::um::libloaderapi::GetModuleHandleW;
 use winapi::um::winbase::{GlobalLock, GlobalSize, GlobalUnlock};
-use winapi::um::winuser::DestroyWindow;
 use winapi::um::winuser::{
-    AddClipboardFormatListener, CloseClipboard, CreateWindowExW, DefWindowProcW, DispatchMessageW,
-    EnumClipboardFormats, GetClipboardData, GetMessageW, IsClipboardFormatAvailable, OpenClipboard,
-    PostQuitMessage, RegisterClassW, RegisterClipboardFormatW, RemoveClipboardFormatListener,
-    TranslateMessage, CF_UNICODETEXT, CS_OWNDC, CW_USEDEFAULT, HWND_MESSAGE, MSG,
-    WM_CLIPBOARDUPDATE, WM_DESTROY, WNDCLASSW, WS_MINIMIZE,
+    AddClipboardFormatListener, CloseClipboard, CreateWindowExW, DefWindowProcW, DestroyWindow,
+    DispatchMessageW, EnumClipboardFormats, GetClipboardData, GetForegroundWindow, GetMessageW,
+    GetWindowTextW, IsClipboardFormatAvailable, OpenClipboard, PostQuitMessage, RegisterClassW,
+    RegisterClipboardFormatW, RemoveClipboardFormatListener, TranslateMessage, CF_UNICODETEXT,
+    CS_OWNDC, CW_USEDEFAULT, HWND_MESSAGE, MSG, WM_CLIPBOARDUPDATE, WM_DESTROY, WNDCLASSW,
+    WS_MINIMIZE,
 };
 
 pub struct Clipboard {
@@ -28,7 +29,6 @@ pub struct Clipboard {
 }
 
 impl Clipboard {
-    // TODO: add feature of fetching owner name!
     fn get_formats() -> HashSet<u32> {
         let mut formats = HashSet::new();
         unsafe {
@@ -58,6 +58,15 @@ impl Clipboard {
                 .chain(once(0))
                 .collect();
             let cf_html = RegisterClipboardFormatW(html_wide.as_ptr());
+            let owner = GetForegroundWindow();
+            let owner = if owner.is_null() {
+                None
+            } else {
+                let mut raw_data: [u16; 255] = mem::uninitialized();
+                let data_len = GetWindowTextW(owner, raw_data.as_mut_ptr(), 255) as usize;
+                let owner_title = String::from_utf16_lossy(&raw_data[0..data_len]);
+                Some(owner_title)
+            };
             let clipboard_data = if formats.contains(&cf_html) {
                 let data = GetClipboardData(cf_html);
                 if data.is_null() {
@@ -81,7 +90,7 @@ impl Clipboard {
                     .name("url")
                     .map_or(None, |url| Some(url.as_str().to_string()));
                 GlobalUnlock(data);
-                Ok(ClipboardData::new((fragment, None, source_url)))
+                Ok(ClipboardData::new((fragment, owner, source_url)))
             } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
                 let data = GetClipboardData(CF_UNICODETEXT);
                 if data.is_null() {
@@ -95,7 +104,7 @@ impl Clipboard {
                 let raw_data = Vec::from_raw_parts(data as *mut u16, data_len, data_len);
                 GlobalUnlock(data);
                 let data = String::from_utf16(&raw_data)?;
-                Ok(ClipboardData::new((data, None)))
+                Ok(ClipboardData::new((data, owner)))
             } else {
                 bail!("Non-text format not available")
             };
