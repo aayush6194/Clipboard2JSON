@@ -1,9 +1,7 @@
-use crate::common::ClipboardFunctions;
-use crate::common::ClipboardSink;
+use crate::common::{ClipboardData, ClipboardFunctions, ClipboardSink};
 use failure::{format_err, Error};
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::iter::once;
@@ -22,17 +20,6 @@ use winapi::um::winuser::{
     TranslateMessage, CF_UNICODETEXT, CS_OWNDC, CW_USEDEFAULT, HWND_MESSAGE, MSG,
     WM_CLIPBOARDUPDATE, WM_DESTROY, WNDCLASSW, WS_MINIMIZE,
 };
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum ClipboardData {
-    Html {
-        url: Option<String>,
-        content: String,
-    },
-    #[serde(rename = "text")]
-    UnicodeText { content: String },
-}
 
 pub struct Clipboard {
     callback: Option<ClipboardSink>,
@@ -85,19 +72,15 @@ impl Clipboard {
                     .name("url")
                     .map_or(None, |url| Some(url.as_str().to_string()));
                 GlobalUnlock(data);
-                Ok(ClipboardData::Html {
-                    url: source_url,
-                    content: fragment,
-                })
+                Ok(ClipboardData::new((fragment, None, source_url)))
             } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
                 let data = GetClipboardData(CF_UNICODETEXT);
                 let data = GlobalLock(data);
                 let len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
                 let v = Vec::from_raw_parts(data as *mut u16, len, len);
                 GlobalUnlock(data);
-                Ok(ClipboardData::UnicodeText {
-                    content: String::from_utf16(&v)?,
-                })
+                let data = String::from_utf16(&v)?;
+                Ok(ClipboardData::new((data, None)))
             } else {
                 Err(format_err!("Non-text format not available"))
             };
@@ -218,8 +201,8 @@ lazy_static! {
     static ref HTML_RE: Regex = Regex::new(
         r#"(?x)
         StartFragment:(?P<start>\d+)\s+
-        EndFragment:(?P<end>\d+)(?s:.*)
-        (SourceURL:(?P<url>\S+))?
+        EndFragment:(?P<end>\d+)\s+
+        (?:SourceURL:(?P<url>\S++))?
         "#
     )
     .unwrap();

@@ -5,36 +5,12 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_ulong};
-use std::time::{SystemTime, UNIX_EPOCH};
 use x11::xlib::{
     AnyPropertyType, Atom, CurrentTime, Display, False, SelectionNotify, Window, XCloseDisplay,
     XConvertSelection, XCreateSimpleWindow, XDefaultRootWindow, XDeleteProperty, XDestroyWindow,
     XEvent, XFetchName, XGetAtomName, XGetSelectionOwner, XGetWindowProperty, XInternAtom,
     XNextEvent, XOpenDisplay, XSelectInput, XA_ATOM,
 };
-
-/// Represents the textual data stored in clipboard as either HTML or UTF8.  
-///
-/// If the clipboard data can be converted to HTML, the owner also includes
-/// the enclosing HTML tags around the content which can be used to format the
-/// content differently. Also, the clipboard owner can convert types such as images
-/// to an img tag with the URL for the image.Unlike the Win API, there does not
-/// seem to be an easy way of getting the URL of the HTML document in X11.
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum ClipboardData {
-    Html {
-        owner: String,
-        content: String,
-        created_at: u64,
-    },
-    #[serde(rename = "text")]
-    UnicodeText {
-        owner: String,
-        content: String,
-        created_at: u64,
-    },
-}
 
 /// Represents a windowless X11 Client and its connection to the X11 Server.
 ///
