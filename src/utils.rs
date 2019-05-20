@@ -20,7 +20,7 @@ where
     stored_data.push(data);
     drop(file); // closes the file so we can overwrite it
     let file = File::create("clipboard.json")?;
-    serde_json::to_writer_pretty(file, &stored_data)?;
+    serde_json::to_writer(file, &stored_data)?;
     Ok(())
 }
 
