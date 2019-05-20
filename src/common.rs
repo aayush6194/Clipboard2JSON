@@ -14,6 +14,9 @@ pub trait ClipboardFunctions: Sized {
     fn watch_clipboard(&self, callback: &ClipboardSink);
 }
 
-/// Takes the clipboard data and writes it to a source
+/// Stores a function that takes the clipboard data and writes it to a source. 
+/// It is stored in a struct because it is easier to implement Clone this way which
+/// plays nicely with the static variables in the WinAPI implementation of the
+/// clipboard. 
 #[derive(Clone)]
 pub struct ClipboardSink(pub fn(ClipboardData) -> Result<(), Error>);
