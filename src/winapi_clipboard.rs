@@ -64,6 +64,13 @@ fn get_formats() -> Result<HashSet<u32>, Error> {
     Ok(formats)
 }
 
+/// Gets the text-based data stored in the clipboard.
+///
+/// This function returns the data in HTML Format, if possible, or gets in the
+/// UTF-16 format. The function `OpenClipboard` with the NULL pointer sets the
+/// clipboard owner to none so the `GetForegroundWindow` is used to get the active
+/// window which is set as the owner of the clipboard. There is a `GetClipboardOwner`
+/// function available but it did not seem to work consistently.
 fn get_clipboard() -> Result<ClipboardData, Error> {
     unsafe {
         if OpenClipboard(null_mut()) == 0 {
@@ -132,6 +139,12 @@ fn get_clipboard() -> Result<ClipboardData, Error> {
     }
 }
 
+/// The callback function called by Windows in response to incoming message queues.
+/// This function is used to listen for `WM_CLIPBOARDUPDATE` events and calls the
+/// callback function stored in a global variable by getting the new data from
+/// the clipboard. The function prints an error message when something wrong happens
+/// like a non-text  format is pasted to the clipboard and it cannot be converted
+/// to text-based format.
 #[allow(dead_code)]
 unsafe extern "system" fn wnd_proc(
     hwnd: HWND,
