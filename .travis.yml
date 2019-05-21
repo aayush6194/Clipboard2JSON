@@ -1,0 +1,17 @@
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
+script:
+  - cargo build --verbose --all
+  - cargo test --verbose --all
+deploy:
+  provider: releases
+  api_key: 'g05L+RxmaM8zZMrpRH5QMnAoLUNj7fooVeEFW4mf/52f73NGbJNHLHhdmfhRbk6uUdv5Vwo+ysILeITkcLunmrZUxZBiNwzT3OEeL+schJh+ctTG/CuTYA6roPv0/1SltfJmVUS2qLYzxnXoVsQrZ3VMHfcH6+rkzQOR+1erXRvRghwfdK1u2i3EY6D+KFCPETxbjyyTcnLNgPFAygDwprGt44bTx7d1Azc+NQyDc55IBXnV/ZpNJmNuJXmOWCZND3usMgzYqvOXX7jX7S049jbjOAvn4d5p45KFVRXBoUmE111HZyVEZAfJYndgj991dhUsXfK4Qxq3FA6BWQ+EleZ/ficOvXqE1pV/6A/gRqLVek/V8V8JHNLbZW/bnVoVOvavg4UyiiNXTG+DMw8hx5pYlkrT719rQiuztTDGYm/7GLaCfI62QyCEH7675mz+S71OOlzTAEME21UxI43nU44DV8v+1NluMp+bXIUfNU7OXlRoSbgQKeGws9uWXDm/Fmqjlq+qsBXE5iCto6KyDBoaheIRBZtibg5FxotWGU0vuvpjLbthfYMGAVqQDdRcr07T9vWB5V7u8QGA1i/0kAjVfJcUS6qXcLWjcLl/8Vsfq8dbSMpEScCLt1uM9+S/DyDCidB/FpjPVGn8WNEWyYwI+uuMk6R5frjwZjULjqw='
+  file: 'target/release/clipboard2json.sh'
+  skip_cleanup: true
