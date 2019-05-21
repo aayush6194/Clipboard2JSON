@@ -33,11 +33,11 @@ I have run into some issues while trying to run the prebuilt binaries on Windows
 
 ## References
 
-###[X11]
+### X11
 * [X Selections, Cut Buffers, and Kill Rings](https://www.jwz.org/doc/x-cut-and-paste.html)
 * [X11: How does “the” clipboard work?](https://www.uninformativ.de/blog/postings/2017-04-02/0/POySTING-en.html)
 * [X11 Wait for and Get Clipboard Text](https://stackoverflow.com/questions/8755471/x11-wait-for-and-get-clipboard-text)
 
-###[WinAPI]
+### WinAPI
 * [Using the Clipboard](https://docs.microsoft.com/en-us/windows/desktop/dataxchg/using-the-clipboard)
 
