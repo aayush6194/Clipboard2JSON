@@ -93,17 +93,41 @@ fn get_clipboard() -> Result<ClipboardData, Error> {
             }
             let data = GlobalLock(data);
             if data.is_null() {
+                GlobalUnlock(data);
                 bail!(io::Error::last_os_error());
             }
-            let data_str = std::ffi::CString::from_raw(data as *mut i8).into_string()?;
-            let captures = HTML_RE.captures(&data_str).ok_or(format_err!(
-                "An error occured while using regex on the HTML clipboard data"
-            ))?;
+            let data_str = std::ffi::CString::from_raw(data as *mut i8)
+                .into_string()
+                .map_err(|err| {
+                    GlobalUnlock(data);
+                    err
+                })?;
+            let captures = HTML_RE
+                .captures(&data_str)
+                .ok_or(format_err!(
+                    "An error occured while using regex on the HTML clipboard data"
+                ))
+                .map_err(|err| {
+                    GlobalUnlock(data);
+                    err
+                })?;
             let fragment = data_str
-                .get(captures[1].parse::<usize>()?..captures[2].parse::<usize>()?)
+                .get(
+                    captures[1].parse::<usize>().map_err(|err| {
+                        GlobalUnlock(data);
+                        err
+                    })?..captures[2].parse::<usize>().map_err(|err| {
+                        GlobalUnlock(data);
+                        err
+                    })?,
+                )
                 .ok_or(format_err!(
                     "An error occured while trying to get the start and end fragments"
-                ))?
+                ))
+                .map_err(|err| {
+                    GlobalUnlock(data);
+                    err
+                })?
                 .to_string();
             let source_url = captures
                 .name("url")
@@ -117,6 +141,7 @@ fn get_clipboard() -> Result<ClipboardData, Error> {
             }
             let data = GlobalLock(data);
             if data.is_null() {
+                GlobalUnlock(data);
                 bail!(io::Error::last_os_error());
             }
             let data_len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
