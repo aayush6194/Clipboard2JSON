@@ -112,7 +112,10 @@ mod tests {
     use crate::Clipboard;
     use clipboard::{ClipboardContext, ClipboardProvider};
 
+    // Cannot set contents in X11 Clipboard
+    // https://github.com/quininer/x11-clipboard/issues/9
     #[test]
+    #[cfg(windows)]
     fn test_get_clipboard_text() {
         let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
         let clipboard = Clipboard::new().unwrap();
