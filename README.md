@@ -6,6 +6,7 @@ over the WinAPI and the X11 library to provide a common interface for working
 with the clipboard.
 
 ## Usage
+
 Make sure you have [git](https://git-scm.com/) and [rustup](https://rustup.rs/)
 installed.
 
@@ -18,5 +19,6 @@ cargo run
 
 You can supply your own custom callback function for when the clipboard content
 changes like in [src/utils.rs](https://github.com/lawrencek0/Clipboard2JSON/blob/master/src/utils.rs).
-Your function needs to implement the [ClipboardSink](https://github.com/lawrencek0/Clipboard2JSON/blob/master/src/common.rs) i.e. it needs to be able to take the `ClipboardData` enum and return
-a `Result<(), Error>` type.
+Your function needs to implement the [ClipboardSink](https://github.com/lawrencek0/Clipboard2JSON/blob/master/src/common.rs)
+i.e. it needs to be able to take the `ClipboardData` enum and return a `Result<(), Error>`
+type.
