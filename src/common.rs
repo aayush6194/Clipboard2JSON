@@ -5,10 +5,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Defines common traits for the clipboard so that it's easier to abstract over
 /// the underlying libraries.
-// @TODO: Add more functions when workng on WINAPI
 pub trait ClipboardFunctions: Sized {
     /// Creates a new `Clipboard` with a pointer to the hidden window
     fn new() -> Result<Self, Error>;
+    /// Gets a list of all the clipboard format targets along with their name
     fn get_targets(&self) -> Result<ClipboardTargets, Error>;
     /// Fetches the data stored in the clipboard as a text-based format
     fn get_clipboard(&self) -> Result<ClipboardData, Error>;
@@ -23,6 +23,9 @@ pub trait ClipboardFunctions: Sized {
 #[derive(Clone)]
 pub struct ClipboardSink(pub fn(ClipboardData) -> Result<(), Error>);
 
+/// Represents the different clipboard format target available in WinAPI and X11.
+/// Both allow to get the target identifier along with their name but somewhat
+/// differ in their representation of it.
 #[derive(Debug)]
 pub enum ClipboardTargets {
     WINAPI(HashMap<String, u32>),
@@ -83,6 +86,8 @@ impl ClipboardData {
     }
 }
 
+/// Helper function for getting the timestamp in milliseconds when the
+/// `ClipboardData` enum is created.
 fn get_created_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -171,6 +171,9 @@ unsafe extern "system" fn wnd_proc(
     }
 }
 
+/// Creates a windowless window. While the window is not needed to get the data
+/// from the clipboard, it is used to listen for the clipboard update events
+/// and call the proper callback function
 fn create_window() -> Result<HWND, Error> {
     let class_name: Vec<u16> = OsStr::new("Clipoard Rust")
         .encode_wide()
@@ -218,14 +221,24 @@ fn create_window() -> Result<HWND, Error> {
     }
 }
 
+/// Holds the pointer to the handle of the windowless window. The handle is used
+/// for listening and responding to the message queue.
 pub struct ClipboardOwner(HWND);
 
 impl ClipboardFunctions for ClipboardOwner {
+    /// Creates a new instance of the struct by creating a new windowless window.
+    /// Note that the callback function is not passed at this pointer but instead
+    /// when calling the watch_clipboard()` functiion.
     fn new() -> Result<Self, Error> {
         let hwnd = create_window()?;
         Ok(ClipboardOwner(hwnd))
     }
 
+    /// Gets the list of all the clipboard formats along with their registered
+    /// names. It compares against the list of all standard clipboard formats which
+    /// can be found at [MDN](https://docs.microsoft.com/en-us/windows/desktop/dataxchg/standard-clipboard-formats).
+    /// If the clipboard is a registered format then it queries for its name. This
+    /// is needed for the HTML Format which is a registered format.
     fn get_targets(&self) -> Result<ClipboardTargets, Error> {
         unsafe {
             if OpenClipboard(null_mut()) == 0 {
@@ -274,10 +287,15 @@ impl ClipboardFunctions for ClipboardOwner {
         }
     }
 
+    /// Gets the clipboard data in a text-based format if possible. It tries to
+    /// return the text in the HTML format if possible or returns it as the UTF-16
+    /// Windows string.
     fn get_clipboard(&self) -> Result<ClipboardData, Error> {
         get_clipboard()
     }
 
+    /// Adds the window to the clipboard format listener list, sets up the window
+    /// to listen for events and stores the callback function in a global variable.
     fn watch_clipboard(&self, callback: &ClipboardSink) {
         unsafe {
             *CLIPBOARD.lock().unwrap() = Some(callback.clone());
@@ -317,6 +335,7 @@ impl ClipboardFunctions for ClipboardOwner {
 }
 
 impl Drop for ClipboardOwner {
+    /// Calls the `DestroyWindow` function to destroy the windowless window
     fn drop(&mut self) {
         unsafe {
             DestroyWindow(self.0);
@@ -325,7 +344,18 @@ impl Drop for ClipboardOwner {
 }
 
 lazy_static! {
+    /// Global variable which is used to store the callback function that gets
+    /// called when the clipboard is updated. The callback needs to be a static
+    /// global in order to be usable by the WndProc callback function. WndProc is
+    /// an unsafe extern function which can neither be modified to accept the callback
+    /// nor can it be wrapped inside a higher function where the callback is passed in
+    /// as a paramter since an unsafe function cannot capture the paramter variables
+    /// (closures cannot be unsafe).
     static ref CLIPBOARD: Mutex<Option<ClipboardSink>> = Mutex::new(None);
+    /// Used for extracting the fields in the HTML Clipboard. The StartFragment
+    /// and EndFragment is used to exactly extract the HTML Clipboard selection.
+    /// The source url is optional since applications such as Electron-based
+    /// applications can have the HTML Clipboard without the SourceURL.
     static ref HTML_RE: Regex = Regex::new(
         r#"(?x)
         StartFragment:(?P<start>\d+)\s+
