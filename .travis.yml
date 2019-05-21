@@ -8,7 +8,7 @@ matrix:
     - rust: nightly
   fast_finish: true
 script:
-  - cargo build --verbose --all
+  - cargo build --release
   - cargo test --verbose --all
 jobs:
   include:
@@ -17,7 +17,8 @@ jobs:
     deploy:
       provider: releases
       api_key: $GITHUB_TOKEN
-      file: target/release/clipboard2json
+      file_glob: true
+      file: "./target/release/*"
       skip_cleanup: true
       draft: true
       on:
@@ -28,7 +29,8 @@ jobs:
     deploy:
       provider: releases
       api_key: $GITHUB_TOKEN
-      file: target/release/clipboard2json.exe
+      file_glob: true
+      file: "./target/release/*"
       skip_cleanup: true
       draft: true
       on:
