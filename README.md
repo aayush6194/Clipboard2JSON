@@ -27,10 +27,6 @@ Your function needs to implement the [ClipboardSink](https://github.com/lawrence
 i.e. it needs to be able to take the `ClipboardData` enum and return a `Result<(), Error>`
 type.
 
-## Releases
-
-I have run into some issues while trying to run the prebuilt binaries on Windows, so, it is recommended to built from the source. They can be found over at the [releases page](https://github.com/lawrencek0/Clipboard2JSON/releases/).
-
 ## References
 
 ### X11
