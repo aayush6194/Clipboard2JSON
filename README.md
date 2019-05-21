@@ -1,4 +1,6 @@
-# Clipboard2JSON
+# Clipboard2JSON 
+
+[![Build Status](https://travis-ci.org/lawrencek0/Clipboard2JSON.svg?branch=master)](https://travis-ci.org/lawrencek0/Clipboard2JSON)
 
 Clipboard2JSON is a tool that watches the window's clipboard and writes the
 contents to a JSON file when the clipboard selection changes. It abstracts
