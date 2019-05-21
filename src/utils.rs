@@ -24,7 +24,7 @@ where
     drop(file); // closes the file so we can overwrite it
     let file = File::create("clipboard.json")?;
     serde_json::to_writer(file, &stored_data)?;
-    println!("Successfuly wrote to clipboard.json");
+    println!("Successfuly wrote to clipboard.json\n");
     Ok(())
 }
 
