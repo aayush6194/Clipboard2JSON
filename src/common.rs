@@ -56,6 +56,17 @@ pub enum ClipboardData {
     },
 }
 
+impl ClipboardData {
+    /// Helper function for getting the content stored for testing purpose
+    #[allow(dead_code)]
+    fn get_content(&self) -> String {
+        match self {
+            ClipboardData::Html { content, .. } => content.to_string(),
+            ClipboardData::UnicodeText { content, .. } => content.to_string(),
+        }
+    }
+}
+
 impl From<(String, Option<String>, Option<String>)> for ClipboardData {
     fn from((content, owner, url): (String, Option<String>, Option<String>)) -> ClipboardData {
         ClipboardData::Html {
@@ -93,4 +104,21 @@ fn get_created_timestamp() -> u64 {
         .duration_since(UNIX_EPOCH)
         .expect("Oops went back in time")
         .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Clipboard;
+    use clipboard::{ClipboardContext, ClipboardProvider};
+
+    #[test]
+    fn test_get_clipboard_text() {
+        let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+        let clipboard = Clipboard::new().unwrap();
+        let data = "This is a normal string";
+        ctx.set_contents(data.to_string()).unwrap();
+        let clipboard_data = clipboard.get_clipboard().unwrap().get_content();
+        assert_eq!(data.to_string(), clipboard_data);
+    }
 }
