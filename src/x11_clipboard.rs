@@ -322,10 +322,14 @@ impl ClipboardFunctions for ClipboardOwner {
                 XNextEvent(self.display, &mut event);
 
                 if event.type_ == event_base + XFixesSelectionNotify {
-                    let clipboard_data = ClipboardFunctions::get_clipboard(self).unwrap();
+                    let clipboard_data = ClipboardFunctions::get_clipboard(self);
 
-                    if let Err(e) = callback.0(clipboard_data) {
-                        eprintln!("An error has occured in the callback function {}", e);
+                    if clipboard_data.is_ok() {
+                        if let Err(e) = callback.0(clipboard_data.unwrap()) {
+                            eprintln!("An error has occured in the callback function {}", e);
+                        }
+                    } else {
+                        eprintln!("{}", clipboard_data.unwrap_err());
                     }
                 }
             }
