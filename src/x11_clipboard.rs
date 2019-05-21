@@ -1,5 +1,5 @@
 use crate::common::{ClipboardData, ClipboardFunctions, ClipboardSink, ClipboardTargets};
-use failure::{format_err, Error};
+use failure::{bail, format_err, Error};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem;
@@ -61,7 +61,7 @@ impl ClipboardOwner {
             }
 
             if event.selection.property == 0 {
-                return Err(format_err!("The conversion could not be performed."));
+                bail!("The conversion could not be performed.");
             }
 
             let mut return_type_id: Atom = mem::uninitialized();
@@ -89,7 +89,7 @@ impl ClipboardOwner {
             // Copying large buffer is not currently implemented
             // @TODO: Work with incr_id
             if return_type_id == incr_id {
-                return Err(format_err!("Data is too large to copy"));
+                bail!("Data is too large to copy");
             }
 
             XGetWindowProperty(
@@ -134,7 +134,7 @@ impl ClipboardFunctions for ClipboardOwner {
         let display = unsafe { XOpenDisplay(std::ptr::null()) };
 
         if display.is_null() {
-            return Err(format_err!("Could not connect to XServer"));
+            bail!("Could not connect to XServer");
         }
 
         let window = unsafe {
@@ -192,7 +192,7 @@ impl ClipboardFunctions for ClipboardOwner {
             }
 
             if event.selection.property == 0 {
-                return Err(format_err!("Could not convert selection to targets"));
+                bail!("Could not convert selection to targets");
             }
 
             let mut return_type_id: Atom = mem::uninitialized();
