@@ -15,4 +15,4 @@ pub mod clipboard {
     pub type Clipboard = winapi_clipboard::ClipboardOwner;
 }
 
-pub use clipboard::Clipboard;
+pub use crate::clipboard::Clipboard;

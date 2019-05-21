@@ -1,0 +1,37 @@
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
+script:
+  - cargo build --release
+  - cargo test --verbose --all
+jobs:
+  include:
+    -stage: compile linux assets and publish
+    os: linux
+    deploy:
+      provider: releases
+      api_key: $GITHUB_TOKEN
+      file_glob: true
+      file: "./target/release/*"
+      skip_cleanup: true
+      draft: true
+      on:
+        tags: true
+  include:
+    -stage: compile windows assets and publish
+    os: windows
+    deploy:
+      provider: releases
+      api_key: $GITHUB_TOKEN
+      file_glob: true
+      file: "./target/release/*"
+      skip_cleanup: true
+      draft: true
+      on:
+        tags: true

@@ -1,6 +1,5 @@
-use crate::common::{ClipboardFunctions, ClipboardSink};
-use failure::{format_err, Error};
-use serde::{Deserialize, Serialize};
+use crate::common::{ClipboardData, ClipboardFunctions, ClipboardSink, ClipboardTargets};
+use failure::{bail, format_err, Error};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem;
@@ -33,10 +32,139 @@ extern "C" {
 }
 
 impl ClipboardOwner {
+    /// Fetches the data stored in the clipboard according to the `target_id` which
+    /// represents the target format the selection needs to be converted.
+    fn get_clipboard(
+        &self,
+        clipboard_id: Atom,
+        target_id: Atom,
+        event: &mut XEvent,
+    ) -> Result<String, Error> {
+        unsafe {
+            let incr_id = XInternAtom(self.display, CString::new("INCR")?.as_ptr(), 0);
+
+            XConvertSelection(
+                self.display,
+                clipboard_id,
+                target_id,
+                self.prop_id,
+                self.window,
+                CurrentTime,
+            );
+
+            loop {
+                XNextEvent(self.display, event);
+
+                if event.type_ == SelectionNotify {
+                    break;
+                }
+            }
+
+            if event.selection.property == 0 {
+                bail!("The conversion could not be performed.");
+            }
+
+            let mut return_type_id: Atom = mem::uninitialized();
+            let mut return_format: c_int = 0;
+            let mut returned_items: c_ulong = 0;
+            let mut bytes_left: c_ulong = 0;
+            let mut result: *mut c_uchar = mem::uninitialized();
+
+            // Used to get the size and the type of the selection
+            XGetWindowProperty(
+                self.display,
+                self.window,
+                self.prop_id,
+                0,
+                0,
+                False,
+                AnyPropertyType as u64,
+                &mut return_type_id,
+                &mut return_format,
+                &mut returned_items,
+                &mut bytes_left,
+                &mut result,
+            );
+
+            // Copying large buffer is not currently implemented
+            // @TODO: Work with incr_id
+            if return_type_id == incr_id {
+                bail!("Data is too large to copy");
+            }
+
+            XGetWindowProperty(
+                self.display,
+                self.window,
+                self.prop_id,
+                0,
+                bytes_left as i64 * mem::size_of::<c_char>() as i64,
+                False,
+                AnyPropertyType as u64,
+                &mut return_type_id,
+                &mut return_format,
+                &mut returned_items,
+                &mut bytes_left,
+                &mut result,
+            );
+
+            let data = CString::from_raw(result as *mut c_char);
+            let data = data.to_str()?;
+            Ok(data.to_string())
+        }
+    }
+
+    fn get_owner_title(&self, clipboard_id: Atom) -> Result<String, Error> {
+        unsafe {
+            let owner = XGetSelectionOwner(self.display, clipboard_id);
+            let mut owner_title: *mut c_char = mem::uninitialized();
+            XFetchName(self.display, owner, &mut owner_title);
+            let owner_title = CString::from_raw(owner_title);
+            let owner_title = owner_title.to_str()?;
+            Ok(owner_title.to_string())
+        }
+    }
+}
+
+impl ClipboardFunctions for ClipboardOwner {
+    /// Creates a new instance of the clipboard.
+    ///
+    /// Connects to the XServer and creates a unmapped window for requesting data
+    /// from the owner of the selection.
+    fn new() -> Result<Self, Error> {
+        let display = unsafe { XOpenDisplay(std::ptr::null()) };
+
+        if display.is_null() {
+            bail!("Could not connect to XServer");
+        }
+
+        let window = unsafe {
+            XCreateSimpleWindow(
+                display,
+                XDefaultRootWindow(display),
+                -10,
+                -10,
+                1,
+                1,
+                0,
+                0,
+                0,
+            )
+        };
+
+        let prop_id =
+            unsafe { XInternAtom(display, CString::new("XSEL_DATA").unwrap().as_ptr(), False) };
+
+        Ok(ClipboardOwner {
+            display,
+            window,
+            prop_id,
+        })
+    }
+
     /// Gets a hashmap of content type targets along with their atom identifier
     /// that the clipboard owner can convert the data to. The current implementation
     /// only handles HTML and text based formats i.e. text/html, UTF8_STRING, TEXT
-    fn get_targets(&self) -> Result<HashMap<String, Atom>, Error> {
+    fn get_targets(&self) -> Result<ClipboardTargets, Error> {
         unsafe {
             let mut event: XEvent = mem::uninitialized();
             let targets_id = XInternAtom(self.display, CString::new("TARGETS")?.as_ptr(), False);
@@ -64,7 +192,7 @@ impl ClipboardOwner {
             }
 
             if event.selection.property == 0 {
-                return Err(format_err!("Could not convert selection to targets"));
+                bail!("Could not convert selection to targets");
             }
 
             let mut return_type_id: Atom = mem::uninitialized();
@@ -120,137 +248,8 @@ impl ClipboardOwner {
                 })
                 .collect::<HashMap<String, Atom>>();
 
-            Ok(targets)
+            Ok(ClipboardTargets::X11(targets))
         }
-    }
-
-    /// Fetches the data stored in the clipboard according to the `target_id` which
-    /// represents the target format the selection needs to be converted.
-    fn get_clipboard(
-        &self,
-        clipboard_id: Atom,
-        target_id: Atom,
-        event: &mut XEvent,
-    ) -> Result<String, Error> {
-        unsafe {
-            let incr_id = XInternAtom(self.display, CString::new("INCR")?.as_ptr(), 0);
-
-            XConvertSelection(
-                self.display,
-                clipboard_id,
-                target_id,
-                self.prop_id,
-                self.window,
-                CurrentTime,
-            );
-
-            loop {
-                XNextEvent(self.display, event);
-
-                if event.type_ == SelectionNotify {
-                    break;
-                }
-            }
-
-            if event.selection.property == 0 {
-                return Err(format_err!("The conversion could not be performed."));
-            }
-
-            let mut return_type_id: Atom = mem::uninitialized();
-            let mut return_format: c_int = 0;
-            let mut returned_items: c_ulong = 0;
-            let mut bytes_left: c_ulong = 0;
-            let mut result: *mut c_uchar = mem::uninitialized();
-
-            // Used to get the size and the type of the selection
-            XGetWindowProperty(
-                self.display,
-                self.window,
-                self.prop_id,
-                0,
-                0,
-                False,
-                AnyPropertyType as u64,
-                &mut return_type_id,
-                &mut return_format,
-                &mut returned_items,
-                &mut bytes_left,
-                &mut result,
-            );
-
-            // Copying large buffer is not currently implemented
-            // @TODO: Work with incr_id
-            if return_type_id == incr_id {
-                return Err(format_err!("Data is too large to copy"));
-            }
-
-            XGetWindowProperty(
-                self.display,
-                self.window,
-                self.prop_id,
-                0,
-                bytes_left as i64 * mem::size_of::<c_char>() as i64,
-                False,
-                AnyPropertyType as u64,
-                &mut return_type_id,
-                &mut return_format,
-                &mut returned_items,
-                &mut bytes_left,
-                &mut result,
-            );
-
-            let data = CString::from_raw(result as *mut c_char);
-            let data = data.to_str()?;
-            Ok(data.to_string())
-        }
-    }
-
-    fn get_owner_title(&self, clipboard_id: Atom) -> Result<String, Error> {
-        unsafe {
-            let owner = XGetSelectionOwner(self.display, clipboard_id);
-            let mut owner_title: *mut c_char = mem::uninitialized();
-            XFetchName(self.display, owner, &mut owner_title);
-            let owner_title = CString::from_raw(owner_title);
-            let owner_title = owner_title.to_str()?;
-            Ok(owner_title.to_string())
-        }
-    }
-}
-
-impl ClipboardFunctions for ClipboardOwner {
-    /// Creates a new instance of the clipboard.
-    ///
-    /// Connects to the XServer and creates a unmapped window for requesting data
-    /// from the owner of the selection.
-    fn new() -> Result<Self, Error> {
-        let display = unsafe { XOpenDisplay(std::ptr::null()) };
-
-        if display.is_null() {
-            return Err(format_err!("Could not connect to XServer"));
-        }
-
-        let window = unsafe {
-            XCreateSimpleWindow(
-                display,
-                XDefaultRootWindow(display),
-                -10,
-                -10,
-                1,
-                1,
-                0,
-                0,
-                0,
-            )
-        };
-
-        let prop_id =
-            unsafe { XInternAtom(display, CString::new("XSEL_DATA").unwrap().as_ptr(), False) };
-
-        Ok(ClipboardOwner {
-            display,
-            window,
-            prop_id,
-        })
     }
 
     /// Fetches the selection stored in the clipboard if it can converted to a text-based format
@@ -260,7 +259,10 @@ impl ClipboardFunctions for ClipboardOwner {
     /// owner is a browser then the owner might be able to convert into a HTML img
     /// tag with the source pointing to the URL of the image.
     fn get_clipboard(&self) -> Result<ClipboardData, Error> {
-        let targets = self.get_targets()?;
+        let targets = match self.get_targets()? {
+            ClipboardTargets::X11(x) => x,
+            _ => unreachable!(),
+        };
 
         let target_id = targets
             .get("text/html")
@@ -275,22 +277,15 @@ impl ClipboardFunctions for ClipboardOwner {
         // Add extra metadata such as the clipboard owner
         // and when the selection was copied from the owner
         let owner_title = self.get_owner_title(clipboard_id)?;
-        let created_at = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-        let clipboard_data = if targets.get("text/html").is_some() {
-            ClipboardData::Html {
-                owner: owner_title,
-                content: clipboard_data,
-                created_at,
-            }
-        } else {
-            ClipboardData::UnicodeText {
-                owner: owner_title,
-                content: clipboard_data,
-                created_at,
-            }
-        };
+        if targets.get("text/html").is_some() {
+            return Ok(ClipboardData::new((
+                clipboard_data,
+                Some(owner_title),
+                None,
+            )));
+        }
 
-        Ok(clipboard_data)
+        Ok(ClipboardData::new((clipboard_data, Some(owner_title))))
     }
 
     /// Watches the clipboard for changes and calls the callback function with
@@ -327,10 +322,14 @@ impl ClipboardFunctions for ClipboardOwner {
                 XNextEvent(self.display, &mut event);
 
                 if event.type_ == event_base + XFixesSelectionNotify {
-                    let clipboard_data = ClipboardFunctions::get_clipboard(self).unwrap();
+                    let clipboard_data = ClipboardFunctions::get_clipboard(self);
 
-                    if let Err(e) = callback.0(clipboard_data) {
-                        eprintln!("An error has occured in the callback function {}", e);
+                    if clipboard_data.is_ok() {
+                        if let Err(e) = callback.0(clipboard_data.unwrap()) {
+                            eprintln!("An error has occured in the callback function {}", e);
+                        }
+                    } else {
+                        eprintln!("{}", clipboard_data.unwrap_err());
                     }
                 }
             }
