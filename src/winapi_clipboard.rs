@@ -2,6 +2,7 @@ use crate::common::{ClipboardData, ClipboardFunctions, ClipboardSink, ClipboardT
 use failure::{bail, format_err, Error};
 use lazy_static::lazy_static;
 use regex::Regex;
+use scopeguard::defer;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::io;
@@ -76,6 +77,11 @@ fn get_clipboard() -> Result<ClipboardData, Error> {
         if OpenClipboard(null_mut()) == 0 {
             bail!(io::Error::last_os_error());
         }
+
+        defer! {{
+            CloseClipboard();
+        }}
+
         let formats = get_formats()?;
 
         // check for CF_CLIPBOARD
@@ -99,47 +105,26 @@ fn get_clipboard() -> Result<ClipboardData, Error> {
                 bail!(io::Error::last_os_error());
             }
             let data = GlobalLock(data);
-            if data.is_null() {
+            defer! {{
                 GlobalUnlock(data);
+            }}
+
+            if data.is_null() {
                 bail!(io::Error::last_os_error());
             }
-            let data_str = std::ffi::CString::from_raw(data as *mut i8)
-                .into_string()
-                .map_err(|err| {
-                    GlobalUnlock(data);
-                    err
-                })?;
-            let captures = HTML_RE
-                .captures(&data_str)
-                .ok_or(format_err!(
-                    "An error occured while using regex on the HTML clipboard data"
-                ))
-                .map_err(|err| {
-                    GlobalUnlock(data);
-                    err
-                })?;
+            let data_str = std::ffi::CString::from_raw(data as *mut i8).into_string()?;
+            let captures = HTML_RE.captures(&data_str).ok_or(format_err!(
+                "An error occured while using regex on the HTML clipboard data"
+            ))?;
             let fragment = data_str
-                .get(
-                    captures[1].parse::<usize>().map_err(|err| {
-                        GlobalUnlock(data);
-                        err
-                    })?..captures[2].parse::<usize>().map_err(|err| {
-                        GlobalUnlock(data);
-                        err
-                    })?,
-                )
+                .get(captures[1].parse::<usize>()?..captures[2].parse::<usize>()?)
                 .ok_or(format_err!(
                     "An error occured while trying to get the start and end fragments"
-                ))
-                .map_err(|err| {
-                    GlobalUnlock(data);
-                    err
-                })?
+                ))?
                 .to_string();
             let source_url = captures
                 .name("url")
                 .map_or(None, |url| Some(url.as_str().to_string()));
-            GlobalUnlock(data);
             Ok(ClipboardData::new((fragment, owner, source_url)))
         } else if IsClipboardFormatAvailable(CF_UNICODETEXT) != 0 {
             let data = GetClipboardData(CF_UNICODETEXT);
@@ -147,19 +132,20 @@ fn get_clipboard() -> Result<ClipboardData, Error> {
                 bail!(io::Error::last_os_error());
             }
             let data = GlobalLock(data);
-            if data.is_null() {
+            defer! {{
                 GlobalUnlock(data);
+            }}
+
+            if data.is_null() {
                 bail!(io::Error::last_os_error());
             }
             let data_len = GlobalSize(data) / std::mem::size_of::<wchar_t>() - 1;
             let raw_data = Vec::from_raw_parts(data as *mut u16, data_len, data_len);
-            GlobalUnlock(data);
             let data = String::from_utf16(&raw_data)?;
             Ok(ClipboardData::new((data, owner)))
         } else {
             bail!("Non-text format not available")
         };
-        CloseClipboard();
         clipboard_data
     }
 }
@@ -274,8 +260,10 @@ impl ClipboardFunctions for ClipboardOwner {
             if OpenClipboard(null_mut()) == 0 {
                 bail!(io::Error::last_os_error());
             }
+            defer! {{
+                CloseClipboard();
+            }}
             let formats = get_formats()?;
-            CloseClipboard();
             let formats = formats.iter().fold(HashMap::new(), |mut map, format| {
                 let name = match *format {
                     CF_BITMAP => "CF_BITMAP".to_string(),
@@ -345,6 +333,10 @@ impl ClipboardFunctions for ClipboardOwner {
                 );
             }
 
+            defer! {{
+                RemoveClipboardFormatListener(self.0);
+            }}
+
             loop {
                 let ret = GetMessageW(&mut msg as *mut MSG, self.0, 0, 0);
 
@@ -359,7 +351,6 @@ impl ClipboardFunctions for ClipboardOwner {
                 TranslateMessage(&msg as *const MSG);
                 DispatchMessageW(&msg as *const MSG);
             }
-            RemoveClipboardFormatListener(self.0);
         }
     }
 }
