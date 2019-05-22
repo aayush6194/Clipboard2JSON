@@ -198,8 +198,11 @@ unsafe extern "system" fn wnd_proc(
 
 /// Creates a windowless window. While the window is not needed to get the data
 /// from the clipboard, it is used to listen for the clipboard update events
-/// and call the proper callback function
-fn create_window() -> Result<HWND, Error> {
+/// and call the proper callback function.
+/// This function is marked unsafe because it returns a raw pointer to the handle
+/// of the newly created window. The window pointed by the handle must be destroyed
+/// before dropping the value.
+unsafe fn create_window() -> Result<HWND, Error> {
     let class_name: Vec<u16> = OsStr::new("Clipoard Rust")
         .encode_wide()
         .chain(once(0))
