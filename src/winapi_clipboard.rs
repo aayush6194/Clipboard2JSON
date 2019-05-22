@@ -208,45 +208,43 @@ unsafe fn create_window() -> Result<HWND, Error> {
         .chain(once(0))
         .collect();
 
-    unsafe {
-        let wc = WNDCLASSW {
-            style: CS_OWNDC,
-            lpfnWndProc: Some(wnd_proc),
-            hInstance: GetModuleHandleW(null_mut()),
-            lpszClassName: class_name.as_ptr(),
-            cbClsExtra: 0,
-            cbWndExtra: 0,
-            hIcon: null_mut(),
-            hCursor: null_mut(),
-            hbrBackground: null_mut(),
-            lpszMenuName: null_mut(),
-        };
+    let wc = WNDCLASSW {
+        style: CS_OWNDC,
+        lpfnWndProc: Some(wnd_proc),
+        hInstance: GetModuleHandleW(null_mut()),
+        lpszClassName: class_name.as_ptr(),
+        cbClsExtra: 0,
+        cbWndExtra: 0,
+        hIcon: null_mut(),
+        hCursor: null_mut(),
+        hbrBackground: null_mut(),
+        lpszMenuName: null_mut(),
+    };
 
-        if RegisterClassW(&wc) == 0 {
-            bail!(io::Error::last_os_error());
-        }
-
-        let hwnd = CreateWindowExW(
-            0,
-            class_name.as_ptr(),
-            class_name.as_ptr(),
-            WS_MINIMIZE,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            HWND_MESSAGE,
-            null_mut(),
-            GetModuleHandleW(null_mut()),
-            null_mut(),
-        );
-
-        if hwnd.is_null() {
-            bail!(io::Error::last_os_error());
-        }
-
-        Ok(hwnd)
+    if RegisterClassW(&wc) == 0 {
+        bail!(io::Error::last_os_error());
     }
+
+    let hwnd = CreateWindowExW(
+        0,
+        class_name.as_ptr(),
+        class_name.as_ptr(),
+        WS_MINIMIZE,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        HWND_MESSAGE,
+        null_mut(),
+        GetModuleHandleW(null_mut()),
+        null_mut(),
+    );
+
+    if hwnd.is_null() {
+        bail!(io::Error::last_os_error());
+    }
+
+    Ok(hwnd)
 }
 
 /// Holds the pointer to the handle of the windowless window. The handle is used
