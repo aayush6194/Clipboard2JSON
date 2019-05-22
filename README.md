@@ -26,3 +26,14 @@ changes like in [src/utils.rs](https://github.com/lawrencek0/Clipboard2JSON/blob
 Your function needs to implement the [ClipboardSink](https://github.com/lawrencek0/Clipboard2JSON/blob/master/src/common.rs)
 i.e. it needs to be able to take the `ClipboardData` enum and return a `Result<(), Error>`
 type.
+
+## References
+
+### X11
+* [X Selections, Cut Buffers, and Kill Rings](https://www.jwz.org/doc/x-cut-and-paste.html)
+* [X11: How does “the” clipboard work?](https://www.uninformativ.de/blog/postings/2017-04-02/0/POySTING-en.html)
+* [X11 Wait for and Get Clipboard Text](https://stackoverflow.com/questions/8755471/x11-wait-for-and-get-clipboard-text)
+
+### WinAPI
+* [Using the Clipboard](https://docs.microsoft.com/en-us/windows/desktop/dataxchg/using-the-clipboard)
+
