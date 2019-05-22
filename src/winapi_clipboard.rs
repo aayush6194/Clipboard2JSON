@@ -250,15 +250,17 @@ fn create_window() -> Result<HWND, Error> {
 /// for listening and responding to the message queue.
 pub struct ClipboardOwner(HWND);
 
-impl ClipboardFunctions for ClipboardOwner {
+impl ClipboardOwner {
     /// Creates a new instance of the struct by creating a new windowless window.
     /// Note that the callback function is not passed at this pointer but instead
     /// when calling the watch_clipboard()` functiion.
-    fn new() -> Result<Self, Error> {
+    pub fn new() -> Result<Self, Error> {
         let hwnd = create_window()?;
         Ok(ClipboardOwner(hwnd))
     }
+}
 
+impl ClipboardFunctions for ClipboardOwner {
     /// Gets the list of all the clipboard formats along with their registered
     /// names. It compares against the list of all standard clipboard formats which
     /// can be found at [MDN](https://docs.microsoft.com/en-us/windows/desktop/dataxchg/standard-clipboard-formats).
