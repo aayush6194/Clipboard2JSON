@@ -258,8 +258,10 @@ impl ClipboardOwner {
     /// Note that the callback function is not passed at this pointer but instead
     /// when calling the watch_clipboard()` functiion.
     pub fn new() -> Result<Self, Error> {
-        let hwnd = create_window()?;
-        Ok(ClipboardOwner(hwnd))
+        unsafe {
+            let hwnd = create_window()?;
+            Ok(ClipboardOwner(hwnd))
+        }
     }
 }
 
