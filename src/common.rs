@@ -5,9 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Defines common traits for the clipboard so that it's easier to abstract over
 /// the underlying libraries.
-pub trait ClipboardFunctions: Sized {
-    /// Creates a new `Clipboard` with a pointer to the hidden window
-    fn new() -> Result<Self, Error>;
+pub trait ClipboardFunctions {
     /// Gets a list of all the clipboard format targets along with their name
     fn get_targets(&self) -> Result<ClipboardTargets, Error>;
     /// Fetches the data stored in the clipboard as a text-based format

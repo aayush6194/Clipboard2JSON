@@ -32,6 +32,40 @@ extern "C" {
 }
 
 impl ClipboardOwner {
+    /// Creates a new instance of the clipboard.
+    ///
+    /// Connects to the XServer and creates a unmapped window for requesting data
+    /// from the owner of the selection.
+    pub fn new() -> Result<Self, Error> {
+        let display = unsafe { XOpenDisplay(std::ptr::null()) };
+
+        if display.is_null() {
+            bail!("Could not connect to XServer");
+        }
+
+        let window = unsafe {
+            XCreateSimpleWindow(
+                display,
+                XDefaultRootWindow(display),
+                -10,
+                -10,
+                1,
+                1,
+                0,
+                0,
+                0,
+            )
+        };
+
+        let prop_id =
+            unsafe { XInternAtom(display, CString::new("XSEL_DATA").unwrap().as_ptr(), False) };
+
+        Ok(ClipboardOwner {
+            display,
+            window,
+            prop_id,
+        })
+    }
     /// Fetches the data stored in the clipboard according to the `target_id` which
     /// represents the target format the selection needs to be converted.
     fn get_clipboard(
@@ -126,41 +160,6 @@ impl ClipboardOwner {
 }
 
 impl ClipboardFunctions for ClipboardOwner {
-    /// Creates a new instance of the clipboard.
-    ///
-    /// Connects to the XServer and creates a unmapped window for requesting data
-    /// from the owner of the selection.
-    fn new() -> Result<Self, Error> {
-        let display = unsafe { XOpenDisplay(std::ptr::null()) };
-
-        if display.is_null() {
-            bail!("Could not connect to XServer");
-        }
-
-        let window = unsafe {
-            XCreateSimpleWindow(
-                display,
-                XDefaultRootWindow(display),
-                -10,
-                -10,
-                1,
-                1,
-                0,
-                0,
-                0,
-            )
-        };
-
-        let prop_id =
-            unsafe { XInternAtom(display, CString::new("XSEL_DATA").unwrap().as_ptr(), False) };
-
-        Ok(ClipboardOwner {
-            display,
-            window,
-            prop_id,
-        })
-    }
-
     /// Gets a hashmap of content type targets along with their atom identifier
     /// that the clipboard owner can convert the data to. The current implementation
     /// only handles HTML and text based formats i.e. text/html, UTF8_STRING, TEXT
